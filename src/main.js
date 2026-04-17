@@ -202,6 +202,28 @@ windowMain.setApiManager(apiManager); // Sets the API manager
 templateManager.setWindowMain(windowMain);
 templateManager.setSettingsManager(settingsManager); // Sets the settings manager
 
+const bmHotkeys = (e) => {
+  if (e.repeat) return;
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  if (e.code !== 'KeyX') return;
+
+  e.preventDefault();
+  e.stopImmediatePropagation();
+
+  if (e.shiftKey) {
+    const enabled = templateManager.toggleXMode();
+    windowMain.handleDisplayStatus(`X-mode: ${enabled ? 'ON' : 'OFF'}`);
+    return;
+  }
+
+  const bg = templateManager.toggleXBackground();
+  if (!bg) return;
+
+  windowMain.handleDisplayStatus(`X-mode BG: ${bg.css}`);
+};
+
+window.addEventListener('keydown', bmHotkeys, true);
+
 const storageTemplates = JSON.parse(GM_getValue('bmTemplates', '{}'));
 console.log(storageTemplates);
 templateManager.importJSON(storageTemplates); // Loads the templates
