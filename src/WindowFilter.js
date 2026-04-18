@@ -46,9 +46,14 @@ export default class WindowFilter extends Overlay {
     this.timeRemainingLocalized = ''; // The date & time the user will complete the templates in the date-time format of the user's device, as a string
 
     // Color list display settings
-    this.sortPrimary = 'id'; // The last used primary sort option
-    this.sortSecondary = 'ascending'; // The last used secondary sort option
-    this.showUnused = false; // Were unused colors shown the last time the user sorted the color list?
+    // Load saved sort settings from storage, fall back to defaults
+    const savedFilterSettings = (() => {
+      try { return JSON.parse(GM_getValue('bmFilterSettings', 'null')); } catch { return null; }
+    })();
+    this.sortPrimary   = savedFilterSettings?.sortPrimary   ?? 'id';
+    this.sortSecondary = savedFilterSettings?.sortSecondary ?? 'ascending';
+    this.showUnused    = savedFilterSettings?.showUnused    ?? false;
+    this.savedScrollTop = savedFilterSettings?.scrollTop    ?? 0;
   }
 
   /** Spawns a Color Filter window.
@@ -181,9 +186,33 @@ export default class WindowFilter extends Overlay {
     // Obtains the scrollable container to put the color filter in
     const scrollableContainer = document.querySelector(`#${this.windowID} .bm-container.bm-scrollable`);
     
+    // Save scroll position whenever user scrolls
+    scrollableContainer.addEventListener('scroll', () => {
+      this.savedScrollTop = scrollableContainer.scrollTop;
+      GM.setValue('bmFilterSettings', JSON.stringify({
+        sortPrimary:   this.sortPrimary,
+        sortSecondary: this.sortSecondary,
+        showUnused:    this.showUnused,
+        scrollTop:     this.savedScrollTop
+      }));
+    });
+
     // These run when the user opens the Color Filter window
     this.#buildColorList(scrollableContainer);
     this.#sortColorList(this.sortPrimary, this.sortSecondary, this.showUnused);
+
+    // Restore saved sort UI values
+    const selPrimary = document.querySelector('#bm-filter-sort-primary');
+    const selSecondary = document.querySelector('#bm-filter-sort-secondary');
+    const chkUnused = document.querySelector('#bm-filter-show-unused');
+    if (selPrimary)   selPrimary.value   = this.sortPrimary;
+    if (selSecondary) selSecondary.value = this.sortSecondary;
+    if (chkUnused)    chkUnused.checked  = this.showUnused;
+
+    // Restore scroll position
+    if (this.savedScrollTop > 0) {
+      scrollableContainer.scrollTop = this.savedScrollTop;
+    }
 
     // Displays some template statistics to the user
     this.updateInnerHTML('#bm-filter-tile-load', `<b>Tiles Loaded:</b> ${localizeNumber(this.tilesLoadedTotal)} / ${localizeNumber(this.tilesTotal)}`);
@@ -269,9 +298,33 @@ export default class WindowFilter extends Overlay {
     // Obtains the scrollable container to put the color filter in
     const scrollableContainer = document.querySelector(`#${this.windowID} .bm-container.bm-scrollable`);
     
+    // Save scroll position whenever user scrolls
+    scrollableContainer.addEventListener('scroll', () => {
+      this.savedScrollTop = scrollableContainer.scrollTop;
+      GM.setValue('bmFilterSettings', JSON.stringify({
+        sortPrimary:   this.sortPrimary,
+        sortSecondary: this.sortSecondary,
+        showUnused:    this.showUnused,
+        scrollTop:     this.savedScrollTop
+      }));
+    });
+
     // These run when the user opens the Color Filter window
     this.#buildColorList(scrollableContainer);
     this.#sortColorList(this.sortPrimary, this.sortSecondary, this.showUnused);
+
+    // Restore saved sort UI values
+    const selPrimary = document.querySelector('#bm-filter-sort-primary');
+    const selSecondary = document.querySelector('#bm-filter-sort-secondary');
+    const chkUnused = document.querySelector('#bm-filter-show-unused');
+    if (selPrimary)   selPrimary.value   = this.sortPrimary;
+    if (selSecondary) selSecondary.value = this.sortSecondary;
+    if (chkUnused)    chkUnused.checked  = this.showUnused;
+
+    // Restore scroll position
+    if (this.savedScrollTop > 0) {
+      scrollableContainer.scrollTop = this.savedScrollTop;
+    }
   }
 
   /** Creates the color list container.
@@ -454,6 +507,14 @@ export default class WindowFilter extends Overlay {
     this.sortPrimary = sortPrimary;
     this.sortSecondary = sortSecondary;
     this.showUnused = showUnused;
+
+    // Persist sort settings to storage
+    GM.setValue('bmFilterSettings', JSON.stringify({
+      sortPrimary:   this.sortPrimary,
+      sortSecondary: this.sortSecondary,
+      showUnused:    this.showUnused,
+      scrollTop:     document.querySelector(`#${this.colorListID}`)?.parentElement?.scrollTop ?? 0
+    }));
 
     const colorList = document.querySelector(`#${this.colorListID}`);
 

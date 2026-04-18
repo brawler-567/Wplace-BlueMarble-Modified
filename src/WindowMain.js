@@ -4,6 +4,7 @@ import { getClipboardData } from "./utils";
 import WindowCredts from "./WindowCredits";
 import WindowFilter from "./WindowFilter";
 import WindowWizard from "./WindowWizard";
+import WindowBookmarks from "./WindowBookmarks";
 
 /** The overlay builder for the main Blue Marble window.
  * @description This class handles the overlay UI for the main window of the Blue Marble userscript.
@@ -24,6 +25,10 @@ export default class WindowMain extends Overlay {
     this.window = null; // Contains the *window* DOM tree
     this.windowID = 'bm-window-main'; // The ID attribute for this window
     this.windowParent = document.body; // The parent of the window DOM tree
+    this.windowStats = null; // Set from main.js after construction
+
+    // Track sub-window instances for toggling
+    this._bookmarksInstance = null;
   }
 
   /** Creates the main Blue Marble window.
@@ -168,6 +173,45 @@ export default class WindowMain extends Overlay {
                   instance.settingsManager.buildWindow();
                 }
               }).buildElement()
+
+              // ── Stats toggle button ─────────────────────────────────────────
+              .addButton({'class': 'bm-button-circle', 'innerHTML': '📊', 'title': 'Pixel Statistics', 'data-active': 'false'}, (instance, button) => {
+                button.onclick = () => {
+                  const statsWindow = document.querySelector('#bm-window-stats');
+                  if (statsWindow) {
+                    // Window exists — close it
+                    statsWindow.remove();
+                    button.dataset['active'] = 'false';
+                    button.style.outline = '';
+                  } else {
+                    // Window doesn't exist — open it
+                    instance.windowStats?.buildWindow();
+                    button.dataset['active'] = 'true';
+                    button.style.outline = '2px solid #ffd200';
+                  }
+                };
+              }).buildElement()
+
+              // ── Bookmarks toggle button ─────────────────────────────────────
+              .addButton({'class': 'bm-button-circle', 'innerHTML': '📍', 'title': 'Saved Positions', 'data-active': 'false'}, (instance, button) => {
+                button.onclick = () => {
+                  const bmWindow = document.querySelector('#bm-window-bookmarks');
+                  if (bmWindow) {
+                    // Window exists — close it
+                    bmWindow.remove();
+                    this._bookmarksInstance = null;
+                    button.dataset['active'] = 'false';
+                    button.style.outline = '';
+                  } else {
+                    // Window doesn't exist — open it
+                    this._bookmarksInstance = new WindowBookmarks(instance);
+                    this._bookmarksInstance.buildWindow();
+                    button.dataset['active'] = 'true';
+                    button.style.outline = '2px solid #5bc8ff';
+                  }
+                };
+              }).buildElement()
+
               .addButton({'class': 'bm-button-circle', 'innerHTML': '🧙', 'title': 'Template Wizard'}, (instance, button) => {
                 button.onclick = () => {
                   const templateManager = instance.apiManager?.templateManager;

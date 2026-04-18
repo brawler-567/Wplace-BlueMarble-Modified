@@ -2246,9 +2246,17 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       this.allPixelsTotal = 0;
       this.timeRemaining = 0;
       this.timeRemainingLocalized = "";
-      this.sortPrimary = "id";
-      this.sortSecondary = "ascending";
-      this.showUnused = false;
+      const savedFilterSettings = (() => {
+        try {
+          return JSON.parse(GM_getValue("bmFilterSettings", "null"));
+        } catch {
+          return null;
+        }
+      })();
+      this.sortPrimary = savedFilterSettings?.sortPrimary ?? "id";
+      this.sortSecondary = savedFilterSettings?.sortSecondary ?? "ascending";
+      this.showUnused = savedFilterSettings?.showUnused ?? false;
+      this.savedScrollTop = savedFilterSettings?.scrollTop ?? 0;
     }
     /** Spawns a Color Filter window.
      * If another color filter window already exists, we DON'T spawn another!
@@ -2305,8 +2313,26 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       }).buildElement().buildElement().buildElement().buildElement().buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
       this.handleDrag(`#${this.windowID}.bm-window`, `#${this.windowID} .bm-dragbar`);
       const scrollableContainer = document.querySelector(`#${this.windowID} .bm-container.bm-scrollable`);
+      scrollableContainer.addEventListener("scroll", () => {
+        this.savedScrollTop = scrollableContainer.scrollTop;
+        GM.setValue("bmFilterSettings", JSON.stringify({
+          sortPrimary: this.sortPrimary,
+          sortSecondary: this.sortSecondary,
+          showUnused: this.showUnused,
+          scrollTop: this.savedScrollTop
+        }));
+      });
       __privateMethod(this, _WindowFilter_instances, buildColorList_fn).call(this, scrollableContainer);
       __privateMethod(this, _WindowFilter_instances, sortColorList_fn).call(this, this.sortPrimary, this.sortSecondary, this.showUnused);
+      const selPrimary = document.querySelector("#bm-filter-sort-primary");
+      const selSecondary = document.querySelector("#bm-filter-sort-secondary");
+      const chkUnused = document.querySelector("#bm-filter-show-unused");
+      if (selPrimary) selPrimary.value = this.sortPrimary;
+      if (selSecondary) selSecondary.value = this.sortSecondary;
+      if (chkUnused) chkUnused.checked = this.showUnused;
+      if (this.savedScrollTop > 0) {
+        scrollableContainer.scrollTop = this.savedScrollTop;
+      }
       this.updateInnerHTML("#bm-filter-tile-load", `<b>Tiles Loaded:</b> ${localizeNumber(this.tilesLoadedTotal)} / ${localizeNumber(this.tilesTotal)}`);
       this.updateInnerHTML("#bm-filter-tot-correct", `<b>Correct Pixels:</b> ${localizeNumber(this.allPixelsCorrectTotal)}`);
       this.updateInnerHTML("#bm-filter-tot-total", `<b>Total Pixels:</b> ${localizeNumber(this.allPixelsTotal)}`);
@@ -2362,8 +2388,26 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       }).buildElement().buildElement().addDiv({ "class": "bm-container bm-scrollable" }).buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
       this.handleDrag(`#${this.windowID}.bm-window`, `#${this.windowID} .bm-dragbar`);
       const scrollableContainer = document.querySelector(`#${this.windowID} .bm-container.bm-scrollable`);
+      scrollableContainer.addEventListener("scroll", () => {
+        this.savedScrollTop = scrollableContainer.scrollTop;
+        GM.setValue("bmFilterSettings", JSON.stringify({
+          sortPrimary: this.sortPrimary,
+          sortSecondary: this.sortSecondary,
+          showUnused: this.showUnused,
+          scrollTop: this.savedScrollTop
+        }));
+      });
       __privateMethod(this, _WindowFilter_instances, buildColorList_fn).call(this, scrollableContainer);
       __privateMethod(this, _WindowFilter_instances, sortColorList_fn).call(this, this.sortPrimary, this.sortSecondary, this.showUnused);
+      const selPrimary = document.querySelector("#bm-filter-sort-primary");
+      const selSecondary = document.querySelector("#bm-filter-sort-secondary");
+      const chkUnused = document.querySelector("#bm-filter-show-unused");
+      if (selPrimary) selPrimary.value = this.sortPrimary;
+      if (selSecondary) selSecondary.value = this.sortSecondary;
+      if (chkUnused) chkUnused.checked = this.showUnused;
+      if (this.savedScrollTop > 0) {
+        scrollableContainer.scrollTop = this.savedScrollTop;
+      }
     }
     /** The information about a specific color on the palette.
      * @typedef {Object} ColorData
@@ -2568,6 +2612,12 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     this.sortPrimary = sortPrimary;
     this.sortSecondary = sortSecondary;
     this.showUnused = showUnused;
+    GM.setValue("bmFilterSettings", JSON.stringify({
+      sortPrimary: this.sortPrimary,
+      sortSecondary: this.sortSecondary,
+      showUnused: this.showUnused,
+      scrollTop: document.querySelector(`#${this.colorListID}`)?.parentElement?.scrollTop ?? 0
+    }));
     const colorList = document.querySelector(`#${this.colorListID}`);
     const colors = Array.from(colorList.children);
     colors.sort((index, nextIndex) => {
@@ -2818,6 +2868,167 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
   };
   var WindowWizard = _WindowWizard;
 
+  // src/WindowBookmarks.js
+  var _WindowBookmarks_instances, loadBookmarks_fn, saveBookmarks_fn, getCurrentMapState_fn, teleport_fn, refreshList_fn;
+  var WindowBookmarks = class extends Overlay {
+    /** Constructor for the bookmarks window
+     * @param {*} executor - The executing class (WindowMain)
+     * @since 0.88.500
+     */
+    constructor(executor) {
+      super(executor.name, executor.version);
+      __privateAdd(this, _WindowBookmarks_instances);
+      this.window = null;
+      this.windowID = "bm-window-bookmarks";
+      this.windowParent = document.body;
+      this.apiManager = executor.apiManager;
+      this.storageKey = "bmBookmarks";
+      this.bookmarks = __privateMethod(this, _WindowBookmarks_instances, loadBookmarks_fn).call(this);
+    }
+    // ─── Public API ──────────────────────────────────────────────────────────────
+    /** Builds and mounts the bookmarks window. */
+    buildWindow() {
+      const existing = document.querySelector(`#${this.windowID}`);
+      if (existing) {
+        existing.parentElement.appendChild(existing);
+        return;
+      }
+      this.window = this.addDiv({
+        "id": this.windowID,
+        "class": "bm-window bm-windowed",
+        "style": "top: 10px; left: unset; right: 385px;"
+      }).addDragbar().addButton({
+        "class": "bm-button-circle",
+        "textContent": "\u25BC",
+        "aria-label": "Minimize Bookmarks window",
+        "data-button-status": "expanded"
+      }, (instance, button) => {
+        button.onclick = () => instance.handleMinimization(button);
+        button.ontouchend = () => {
+          button.click();
+        };
+      }).buildElement().addDiv().buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addDiv({ "class": "bm-container" }).addHeader(1, { "textContent": "\u{1F4CD} Bookmarks" }).buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container" }).addSpan({ "textContent": "Save current position:", "style": "font-size: small; display: block; margin-bottom: 0.25em;" }).buildElement().addDiv({ "class": "bm-flex-between", "style": "gap: 0.5ch;" }).addInput({
+        "type": "text",
+        "id": "bm-bookmark-name-input",
+        "placeholder": "Location name...",
+        "style": "flex:1; background:rgba(0,0,0,0.2); color:white; border-radius:0.5em; padding:0 0.5ch; font-size:small; min-width:0;"
+      }).buildElement().addButton({ "textContent": "\uFF0B Save", "style": "white-space: nowrap; flex-shrink:0;" }, (instance, button) => {
+        button.onclick = async () => {
+          const nameInput = document.querySelector("#bm-bookmark-name-input");
+          const name2 = nameInput?.value?.trim();
+          if (!name2) {
+            instance.handleDisplayError("Please enter a name for the bookmark!");
+            return;
+          }
+          const state = __privateMethod(this, _WindowBookmarks_instances, getCurrentMapState_fn).call(this);
+          if (!state) {
+            instance.handleDisplayError("Could not read map position!\nTry moving the map first.");
+            return;
+          }
+          this.bookmarks.push({ name: name2, ...state });
+          await __privateMethod(this, _WindowBookmarks_instances, saveBookmarks_fn).call(this);
+          nameInput.value = "";
+          __privateMethod(this, _WindowBookmarks_instances, refreshList_fn).call(this);
+          instance.handleDisplayStatus(`Saved: "${name2}"`);
+        };
+      }).buildElement().buildElement().buildElement().addHr().buildElement().addDiv({
+        "class": "bm-container bm-scrollable bm-bookmarks-list",
+        "style": "max-height: 220px;"
+      }).buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
+      this.handleDrag(`#${this.windowID}.bm-window`, `#${this.windowID} .bm-dragbar`);
+      __privateMethod(this, _WindowBookmarks_instances, refreshList_fn).call(this);
+    }
+  };
+  _WindowBookmarks_instances = new WeakSet();
+  // ─── Private helpers ─────────────────────────────────────────────────────────
+  /** Loads bookmarks from GM storage.
+   * @returns {Array}
+   */
+  loadBookmarks_fn = function() {
+    try {
+      return JSON.parse(GM_getValue(this.storageKey, "[]"));
+    } catch {
+      return [];
+    }
+  };
+  saveBookmarks_fn = async function() {
+    await GM.setValue(this.storageKey, JSON.stringify(this.bookmarks));
+  };
+  /** Converts Wplace tile+pixel coords to approximate lat/lng.
+   *  Wplace uses a Leaflet map — the URL params are the Leaflet map center.
+   *  We read lat/lng/zoom directly from the current URL so we always save
+   *  exactly what the user is looking at, not a computed approximation.
+   * @returns {{lat: number, lng: number, zoom: number} | null}
+   */
+  getCurrentMapState_fn = function() {
+    try {
+      const url = new URL(window.location.href);
+      const lat = parseFloat(url.searchParams.get("lat"));
+      const lng = parseFloat(url.searchParams.get("lng"));
+      const zoom = parseFloat(url.searchParams.get("zoom"));
+      if (isNaN(lat) || isNaN(lng) || isNaN(zoom)) return null;
+      return { lat, lng, zoom };
+    } catch {
+      return null;
+    }
+  };
+  /** Navigates the Wplace map to the given lat/lng/zoom.
+   * @param {number} lat
+   * @param {number} lng
+   * @param {number} zoom
+   */
+  teleport_fn = function(lat, lng, zoom) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("lat", lat);
+    url.searchParams.set("lng", lng);
+    url.searchParams.set("zoom", zoom);
+    window.location.href = url.toString();
+  };
+  /** Re-renders the bookmark list inside the window. */
+  refreshList_fn = function() {
+    const list = document.querySelector(`#${this.windowID} .bm-bookmarks-list`);
+    if (!list) return;
+    list.innerHTML = "";
+    if (this.bookmarks.length === 0) {
+      const empty = document.createElement("small");
+      empty.textContent = "No saved positions yet.";
+      empty.style.color = "lightgray";
+      list.appendChild(empty);
+      return;
+    }
+    for (const [index, bm] of this.bookmarks.entries()) {
+      const row = document.createElement("div");
+      row.className = "bm-container bm-flex-between bm-bookmark-row";
+      row.style.cssText = "margin: 0.25em 0; gap: 0.5ch;";
+      const label = document.createElement("span");
+      label.textContent = bm.name;
+      label.title = `lat: ${bm.lat.toFixed(5)}, lng: ${bm.lng.toFixed(5)}, zoom: ${bm.zoom.toFixed(2)}`;
+      label.style.cssText = "flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: small; cursor: default;";
+      const btnGo = document.createElement("button");
+      btnGo.textContent = "\u2192";
+      btnGo.title = "Teleport to this position";
+      btnGo.className = "bm-button-circle";
+      btnGo.style.cssText = "font-size: 1em; flex-shrink: 0;";
+      btnGo.onclick = () => {
+        __privateMethod(this, _WindowBookmarks_instances, teleport_fn).call(this, bm.lat, bm.lng, bm.zoom);
+      };
+      const btnDel = document.createElement("button");
+      btnDel.textContent = "\u2715";
+      btnDel.title = "Delete this bookmark";
+      btnDel.className = "bm-button-circle";
+      btnDel.style.cssText = "font-size: 0.8em; flex-shrink: 0;";
+      btnDel.onclick = async () => {
+        this.bookmarks.splice(index, 1);
+        await __privateMethod(this, _WindowBookmarks_instances, saveBookmarks_fn).call(this);
+        __privateMethod(this, _WindowBookmarks_instances, refreshList_fn).call(this);
+      };
+      row.appendChild(label);
+      row.appendChild(btnGo);
+      row.appendChild(btnDel);
+      list.appendChild(row);
+    }
+  };
+
   // src/WindowMain.js
   var _WindowMain_instances, buildWindowFilter_fn, coordinateInputPaste_fn;
   var WindowMain = class extends Overlay {
@@ -2833,6 +3044,8 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       this.window = null;
       this.windowID = "bm-window-main";
       this.windowParent = document.body;
+      this.windowStats = null;
+      this._bookmarksInstance = null;
     }
     /** Creates the main Blue Marble window.
      * Parent/child relationships in the DOM structure below are indicated by indentation.
@@ -2941,6 +3154,34 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
 Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().addDiv({ "class": "bm-container bm-flex-between", "style": "margin-bottom: 0; flex-direction: column;" }).addDiv({ "class": "bm-flex-between" }).addButton({ "class": "bm-button-circle", "innerHTML": "\u2699\uFE0F", "title": "Settings" }, (instance, button) => {
         button.onclick = () => {
           instance.settingsManager.buildWindow();
+        };
+      }).buildElement().addButton({ "class": "bm-button-circle", "innerHTML": "\u{1F4CA}", "title": "Pixel Statistics", "data-active": "false" }, (instance, button) => {
+        button.onclick = () => {
+          const statsWindow = document.querySelector("#bm-window-stats");
+          if (statsWindow) {
+            statsWindow.remove();
+            button.dataset["active"] = "false";
+            button.style.outline = "";
+          } else {
+            instance.windowStats?.buildWindow();
+            button.dataset["active"] = "true";
+            button.style.outline = "2px solid #ffd200";
+          }
+        };
+      }).buildElement().addButton({ "class": "bm-button-circle", "innerHTML": "\u{1F4CD}", "title": "Saved Positions", "data-active": "false" }, (instance, button) => {
+        button.onclick = () => {
+          const bmWindow = document.querySelector("#bm-window-bookmarks");
+          if (bmWindow) {
+            bmWindow.remove();
+            this._bookmarksInstance = null;
+            button.dataset["active"] = "false";
+            button.style.outline = "";
+          } else {
+            this._bookmarksInstance = new WindowBookmarks(instance);
+            this._bookmarksInstance.buildWindow();
+            button.dataset["active"] = "true";
+            button.style.outline = "2px solid #5bc8ff";
+          }
         };
       }).buildElement().addButton({ "class": "bm-button-circle", "innerHTML": "\u{1F9D9}", "title": "Template Wizard" }, (instance, button) => {
         button.onclick = () => {
@@ -3707,6 +3948,213 @@ Did you try clicking the canvas first?`);
     }
   };
 
+  // src/WindowStats.js
+  var _WindowStats_instances, today_fn, loadStats_fn, saveStats_fn, scheduleMidnightReset_fn, renderChart_fn, renderCounters_fn;
+  var WindowStats = class extends Overlay {
+    /** Constructor for the stats window
+     * @param {*} executor - The executing class (WindowMain)
+     * @since 0.88.500
+     */
+    constructor(executor) {
+      super(executor.name, executor.version);
+      __privateAdd(this, _WindowStats_instances);
+      this.window = null;
+      this.windowID = "bm-window-stats";
+      this.windowParent = document.body;
+      this.storageKey = "bmPixelStats";
+      this.stats = __privateMethod(this, _WindowStats_instances, loadStats_fn).call(this);
+      __privateMethod(this, _WindowStats_instances, scheduleMidnightReset_fn).call(this);
+    }
+    // ─── Public API ──────────────────────────────────────────────────────────────
+    /** Called by the main pixel-tracking logic every time a pixel is successfully placed.
+     *  You must call this from apiManager or main.js after a confirmed POST to /api/pixel/...
+     */
+    async recordPixel(count = 1) {
+      const hour = (/* @__PURE__ */ new Date()).getHours();
+      this.stats.hourly[hour] += count;
+      this.stats.sessionCount += count;
+      this.stats.date = __privateMethod(this, _WindowStats_instances, today_fn).call(this);
+      await __privateMethod(this, _WindowStats_instances, saveStats_fn).call(this);
+      __privateMethod(this, _WindowStats_instances, renderChart_fn).call(this);
+      __privateMethod(this, _WindowStats_instances, renderCounters_fn).call(this);
+    }
+    /** Builds and mounts the stats window. */
+    buildWindow() {
+      const existing = document.querySelector(`#${this.windowID}`);
+      if (existing) {
+        existing.parentElement.appendChild(existing);
+        __privateMethod(this, _WindowStats_instances, renderChart_fn).call(this);
+        __privateMethod(this, _WindowStats_instances, renderCounters_fn).call(this);
+        return;
+      }
+      const CANVAS_W = 262;
+      const CANVAS_H = 110;
+      this.window = this.addDiv({
+        "id": this.windowID,
+        "class": "bm-window bm-windowed",
+        "style": "top: 10px; left: unset; right: 385px;"
+      }).addDragbar().addButton({
+        "class": "bm-button-circle",
+        "textContent": "\u25BC",
+        "aria-label": "Minimize Stats window",
+        "data-button-status": "expanded"
+      }, (instance, button) => {
+        button.onclick = () => instance.handleMinimization(button);
+        button.ontouchend = () => {
+          button.click();
+        };
+      }).buildElement().addDiv().buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addDiv({ "class": "bm-container" }).addHeader(1, { "textContent": "\u{1F4CA} Pixel Stats" }).buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container", "style": "font-size: small; line-height: 1.6;" }).addSpan({ "class": "bm-stats-session", "style": "display:block;", "textContent": "Session: 0 px" }).buildElement().addSpan({ "class": "bm-stats-today", "style": "display:block;", "textContent": "Today:   0 px" }).buildElement().addSpan({ "class": "bm-stats-peak", "style": "display:block;", "textContent": "Peak:    \u2014" }).buildElement().buildElement().addDiv({ "class": "bm-container", "style": "margin-top: 0.5em;" }, (instance, div) => {
+        const canvas = document.createElement("canvas");
+        canvas.className = "bm-stats-canvas";
+        canvas.width = CANVAS_W;
+        canvas.height = CANVAS_H;
+        canvas.style.cssText = "display:block; border-radius:4px; width:100%;";
+        div.appendChild(canvas);
+      }).buildElement().addDiv({ "class": "bm-container bm-flex-between", "style": "margin-bottom: 0;" }).addSmall({ "textContent": "Resets daily at midnight" }).buildElement().addButton({ "textContent": "Reset", "style": "font-size: x-small;" }, (instance, button) => {
+        button.onclick = async () => {
+          if (!confirm("Reset all pixel statistics?")) return;
+          this.stats = { date: __privateMethod(this, _WindowStats_instances, today_fn).call(this), hourly: new Array(24).fill(0), sessionCount: 0 };
+          await __privateMethod(this, _WindowStats_instances, saveStats_fn).call(this);
+          __privateMethod(this, _WindowStats_instances, renderChart_fn).call(this);
+          __privateMethod(this, _WindowStats_instances, renderCounters_fn).call(this);
+          instance.handleDisplayStatus("Stats reset!");
+        };
+      }).buildElement().buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
+      this.handleDrag(`#${this.windowID}.bm-window`, `#${this.windowID} .bm-dragbar`);
+      __privateMethod(this, _WindowStats_instances, renderChart_fn).call(this);
+      __privateMethod(this, _WindowStats_instances, renderCounters_fn).call(this);
+    }
+  };
+  _WindowStats_instances = new WeakSet();
+  // ─── Private helpers ─────────────────────────────────────────────────────────
+  /** Returns today's date as "YYYY-MM-DD" */
+  today_fn = function() {
+    const d = /* @__PURE__ */ new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  /** Loads stats from GM storage; resets hourly array if the stored date differs from today. */
+  loadStats_fn = function() {
+    let data;
+    try {
+      data = JSON.parse(GM_getValue(this.storageKey, "null"));
+    } catch {
+      data = null;
+    }
+    const today = __privateMethod(this, _WindowStats_instances, today_fn).call(this);
+    if (!data || data.date !== today) {
+      return { date: today, hourly: new Array(24).fill(0), sessionCount: 0 };
+    }
+    if (!Array.isArray(data.hourly) || data.hourly.length !== 24) {
+      data.hourly = new Array(24).fill(0);
+    }
+    data.sessionCount = data.sessionCount ?? 0;
+    return data;
+  };
+  saveStats_fn = async function() {
+    await GM.setValue(this.storageKey, JSON.stringify(this.stats));
+  };
+  scheduleMidnightReset_fn = async function() {
+    const now = /* @__PURE__ */ new Date();
+    const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
+    setTimeout(async () => {
+      this.stats = { date: __privateMethod(this, _WindowStats_instances, today_fn).call(this), hourly: new Array(24).fill(0), sessionCount: 0 };
+      await __privateMethod(this, _WindowStats_instances, saveStats_fn).call(this);
+      __privateMethod(this, _WindowStats_instances, renderChart_fn).call(this);
+      __privateMethod(this, _WindowStats_instances, renderCounters_fn).call(this);
+      __privateMethod(this, _WindowStats_instances, scheduleMidnightReset_fn).call(this);
+    }, msToMidnight);
+  };
+  // ─── Chart rendering ──────────────────────────────────────────────────────────
+  /** Draws the 24-hour line chart on the canvas element. */
+  renderChart_fn = function() {
+    const canvas = document.querySelector(`#${this.windowID} .bm-stats-canvas`);
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width;
+    const H = canvas.height;
+    const PAD = { top: 10, right: 12, bottom: 28, left: 36 };
+    const chartW = W - PAD.left - PAD.right;
+    const chartH = H - PAD.top - PAD.bottom;
+    ctx.clearRect(0, 0, W, H);
+    const data = this.stats.hourly;
+    const maxVal = Math.max(...data, 1);
+    const currentHour = (/* @__PURE__ */ new Date()).getHours();
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath();
+    ctx.roundRect(0, 0, W, H, 6);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.1)";
+    ctx.lineWidth = 1;
+    const gridLines = 4;
+    for (let i = 0; i <= gridLines; i++) {
+      const y = PAD.top + chartH / gridLines * i;
+      ctx.beginPath();
+      ctx.moveTo(PAD.left, y);
+      ctx.lineTo(PAD.left + chartW, y);
+      ctx.stroke();
+      const val = Math.round(maxVal * (1 - i / gridLines));
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.font = "9px monospace";
+      ctx.textAlign = "right";
+      ctx.fillText(val, PAD.left - 3, y + 3);
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.45)";
+    ctx.font = "9px monospace";
+    ctx.textAlign = "center";
+    for (let h = 0; h < 24; h += 3) {
+      const x = PAD.left + h / 23 * chartW;
+      ctx.fillText(String(h), x, H - PAD.bottom + 12);
+    }
+    const colW = chartW / 23;
+    const hx = PAD.left + currentHour / 23 * chartW - colW / 2;
+    ctx.fillStyle = "rgba(100,180,255,0.07)";
+    ctx.fillRect(hx, PAD.top, colW, chartH);
+    const xOf = (i) => PAD.left + i / 23 * chartW;
+    const yOf = (v) => PAD.top + chartH - v / maxVal * chartH;
+    const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + chartH);
+    grad.addColorStop(0, "rgba(255,210,0,0.35)");
+    grad.addColorStop(1, "rgba(255,210,0,0.02)");
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(data[0]));
+    for (let i = 1; i < 24; i++) ctx.lineTo(xOf(i), yOf(data[i]));
+    ctx.lineTo(xOf(23), PAD.top + chartH);
+    ctx.lineTo(xOf(0), PAD.top + chartH);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(xOf(0), yOf(data[0]));
+    for (let i = 1; i < 24; i++) ctx.lineTo(xOf(i), yOf(data[i]));
+    ctx.strokeStyle = "#ffd200";
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    for (let i = 0; i <= currentHour; i++) {
+      const x = xOf(i);
+      const y = yOf(data[i]);
+      ctx.beginPath();
+      ctx.arc(x, y, i === currentHour ? 3.5 : 2, 0, Math.PI * 2);
+      ctx.fillStyle = i === currentHour ? "#fff" : "#ffd200";
+      ctx.fill();
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.font = "8px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("hour of day", PAD.left + chartW / 2, H - 2);
+  };
+  /** Updates the session/today counters in the window. */
+  renderCounters_fn = function() {
+    const todayTotal = this.stats.hourly.reduce((a, b) => a + b, 0);
+    const elSession = document.querySelector(`#${this.windowID} .bm-stats-session`);
+    const elToday = document.querySelector(`#${this.windowID} .bm-stats-today`);
+    const elPeak = document.querySelector(`#${this.windowID} .bm-stats-peak`);
+    if (elSession) elSession.textContent = `Session: ${this.stats.sessionCount.toLocaleString()} px`;
+    if (elToday) elToday.textContent = `Today:   ${todayTotal.toLocaleString()} px`;
+    const peakHour = this.stats.hourly.indexOf(Math.max(...this.stats.hourly));
+    const peakVal = this.stats.hourly[peakHour];
+    if (elPeak) elPeak.textContent = peakVal > 0 ? `Peak:    ${peakVal.toLocaleString()} px @ ${String(peakHour).padStart(2, "0")}:00` : "Peak:    \u2014";
+  };
+
   // src/WindowTelemetry.js
   var _WindowTelemetry_instances, setTelemetryValue_fn;
   var WindowTelemetry = class extends Overlay {
@@ -3775,89 +4223,124 @@ Did you try clicking the canvas first?`);
   var name = GM_info.script.name.toString();
   var version = GM_info.script.version.toString();
   var consoleStyle = "color: cornflowerblue;";
-  function inject(callback) {
+  function injectViaBlob(code) {
+    const blob = new Blob([code], { type: "application/javascript" });
+    const url = URL.createObjectURL(blob);
     const script = document.createElement("script");
-    script.setAttribute("bm-name", name);
-    script.setAttribute("bm-cStyle", consoleStyle);
-    script.textContent = `(${callback})();`;
-    document.documentElement?.appendChild(script);
+    script.src = url;
+    script.onload = () => URL.revokeObjectURL(url);
+    document.documentElement.appendChild(script);
     script.remove();
   }
-  inject(() => {
-    const script = document.currentScript;
-    const name2 = script?.getAttribute("bm-name") || "Blue Marble";
-    const consoleStyle2 = script?.getAttribute("bm-cStyle") || "";
-    const fetchedBlobQueue = /* @__PURE__ */ new Map();
-    window.addEventListener("message", (event) => {
-      const { source, endpoint, blobID, blobData, blink } = event.data;
-      const elapsed = Date.now() - blink;
-      console.groupCollapsed(`%c${name2}%c: ${fetchedBlobQueue.size} Recieved IMAGE message about blob "${blobID}"`, consoleStyle2, "");
-      console.log(`Blob fetch took %c${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String(Math.floor(elapsed / 1e3) % 60).padStart(2, "0")}.${String(elapsed % 1e3).padStart(3, "0")}%c MM:SS.mmm`, consoleStyle2, "");
-      console.log(fetchedBlobQueue);
+  injectViaBlob(`
+(function() {
+  const name = ${JSON.stringify(name)};
+  const consoleStyle = ${JSON.stringify(consoleStyle)};
+  const fetchedBlobQueue = new Map();
+
+  // \u2500\u2500 Receive processed tile blobs back from apiManager \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  window.addEventListener('message', (event) => {
+    if (!event.data) return;
+    const { source, endpoint, blobID, blobData, blink } = event.data;
+    if (!source) return;
+
+    if (source === 'blue-marble' && !!blobID && !!blobData && !endpoint) {
+      const elapsed = Date.now() - (blink ?? Date.now());
+      console.groupCollapsed('%c' + name + '%c: ' + fetchedBlobQueue.size + ' Received IMAGE blob "' + blobID + '"', consoleStyle, '');
+      console.log('Blob fetch took ' + String(Math.floor(elapsed/60000)).padStart(2,'0') + ':' + String(Math.floor(elapsed/1000) % 60).padStart(2,'0') + '.' + String(elapsed % 1000).padStart(3,'0') + ' MM:SS.mmm');
       console.groupEnd();
-      if (source == "blue-marble" && !!blobID && !!blobData && !endpoint) {
-        const callback = fetchedBlobQueue.get(blobID);
-        if (typeof callback === "function") {
-          callback(blobData);
-        } else {
-          consoleWarn(`%c${name2}%c: Attempted to retrieve a blob (%s) from queue, but the blobID was not a function! Skipping...`, consoleStyle2, "", blobID);
-        }
-        fetchedBlobQueue.delete(blobID);
+
+      const callback = fetchedBlobQueue.get(blobID);
+      if (typeof callback === 'function') {
+        callback(blobData);
+      } else {
+        console.warn('%c' + name + '%c: blob "' + blobID + '" not in queue, skipping', consoleStyle, '');
       }
-    });
-    const originalFetch = window.fetch;
-    window.fetch = async function(...args) {
-      const response = await originalFetch.apply(this, args);
-      const cloned = response.clone();
-      const endpointName = (args[0] instanceof Request ? args[0]?.url : args[0]) || "ignore";
-      const contentType = cloned.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        console.log(`%c${name2}%c: Sending JSON message about endpoint "${endpointName}"`, consoleStyle2, "");
-        cloned.json().then((jsonData) => {
-          window.postMessage({
-            source: "blue-marble",
-            endpoint: endpointName,
-            jsonData
-          }, "*");
-        }).catch((err) => {
-          console.error(`%c${name2}%c: Failed to parse JSON: `, consoleStyle2, "", err);
-        });
-      } else if (contentType.includes("image/") && (!endpointName.includes("openfreemap") && !endpointName.includes("maps"))) {
-        const blink = Date.now();
-        const blob = await cloned.blob();
-        console.log(`%c${name2}%c: ${fetchedBlobQueue.size} Sending IMAGE message about endpoint "${endpointName}"`, consoleStyle2, "");
-        return new Promise((resolve) => {
-          const blobUUID = crypto.randomUUID();
-          fetchedBlobQueue.set(blobUUID, (blobProcessed) => {
-            resolve(new Response(blobProcessed, {
-              headers: cloned.headers,
-              status: cloned.status,
-              statusText: cloned.statusText
-            }));
-            console.log(`%c${name2}%c: ${fetchedBlobQueue.size} Processed blob "${blobUUID}"`, consoleStyle2, "");
-          });
-          window.postMessage({
-            source: "blue-marble",
-            endpoint: endpointName,
-            blobID: blobUUID,
-            blobData: blob,
-            blink
-          });
-        }).catch((exception) => {
-          const elapsed = Date.now();
-          console.error(`%c${name2}%c: Failed to Promise blob!`, consoleStyle2, "");
-          console.groupCollapsed(`%c${name2}%c: Details of failed blob Promise:`, consoleStyle2, "");
-          console.log(`Endpoint: ${endpointName}
-There are ${fetchedBlobQueue.size} blobs processing...
-Blink: ${blink.toLocaleString()}
-Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String(Math.floor(elapsed / 1e3) % 60).padStart(2, "0")}.${String(elapsed % 1e3).padStart(3, "0")} MM:SS.mmm`);
-          console.error(`Exception stack:`, exception);
-          console.groupEnd();
-        });
-      }
-      return response;
-    };
+      fetchedBlobQueue.delete(blobID);
+    }
   });
+
+  // \u2500\u2500 Intercept fetch \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  const originalFetch = window.fetch;
+
+  window.fetch = async function(...args) {
+    const response = await originalFetch.apply(this, args);
+    const cloned   = response.clone();
+
+    const endpointName = ((args[0] instanceof Request) ? args[0].url : args[0]) || 'ignore';
+    const contentType  = cloned.headers.get('content-type') || '';
+
+    // Pixel placed \u2014 detect any successful request to /api/pixel/
+    // Wplace may call fetch(url, {method:'POST'}) or fetch(new Request(...))
+    // so we check all possible ways method could be POST, or just trust the endpoint
+    const reqMethod = (
+      (args[0] instanceof Request ? args[0].method : null) ||
+      args[1]?.method ||
+      'GET'
+    ).toUpperCase();
+
+    if ((endpointName.includes('/api/pixel/') || endpointName.includes('/paint')) && reqMethod === 'POST' && response.ok) {
+      // Read how many pixels were actually painted from the response
+      cloned.json()
+        .then(data => {
+          const count = (typeof data.painted === 'number' && data.painted > 0) ? data.painted : 1;
+          window.postMessage({ source: 'blue-marble-pixel-placed', count: count }, '*');
+        })
+        .catch(() => {
+          window.postMessage({ source: 'blue-marble-pixel-placed', count: 1 }, '*');
+        });
+    }
+
+    // JSON \u2192 forward to userscript via postMessage
+    if (contentType.includes('application/json')) {
+      console.log('%c' + name + '%c: JSON endpoint "' + endpointName + '"', consoleStyle, '');
+      cloned.json()
+        .then(jsonData => {
+          window.postMessage({
+            source:   'blue-marble',
+            endpoint: endpointName,
+            jsonData: jsonData
+          }, '*');
+        })
+        .catch(err => console.error('%c' + name + '%c: Failed to parse JSON:', consoleStyle, '', err));
+    }
+
+    // Image tile \u2192 intercept for template overlay processing
+    else if (contentType.includes('image/') && !endpointName.includes('openfreemap') && !endpointName.includes('maps')) {
+      const blink = Date.now();
+      const blob  = await cloned.blob();
+
+      console.log('%c' + name + '%c: ' + fetchedBlobQueue.size + ' IMAGE endpoint "' + endpointName + '"', consoleStyle, '');
+
+      return new Promise((resolve) => {
+        const blobUUID = crypto.randomUUID();
+
+        fetchedBlobQueue.set(blobUUID, (blobProcessed) => {
+          resolve(new Response(blobProcessed, {
+            headers:    cloned.headers,
+            status:     cloned.status,
+            statusText: cloned.statusText
+          }));
+          console.log('%c' + name + '%c: ' + fetchedBlobQueue.size + ' Processed blob "' + blobUUID + '"', consoleStyle, '');
+        });
+
+        window.postMessage({
+          source:   'blue-marble',
+          endpoint: endpointName,
+          blobID:   blobUUID,
+          blobData: blob,
+          blink:    blink
+        });
+      }).catch(exception => {
+        console.error('%c' + name + '%c: Failed to Promise blob!', consoleStyle, '');
+        console.error(exception);
+      });
+    }
+
+    return response;
+  };
+})();
+`);
   var cssOverlay = GM_getResourceText("CSS-BM-File");
   GM_addStyle(cssOverlay);
   var robotoMonoInjectionPoint = "robotoMonoInjectionPoint";
@@ -3879,13 +4362,20 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
   var userSettings = JSON.parse(GM_getValue("bmUserSettings", "{}"));
   var observers = new Observers();
   var windowMain = new WindowMain(name, version);
+  var windowStats = new WindowStats(windowMain);
   var templateManager = new TemplateManager(name, version);
   var apiManager = new ApiManager(templateManager);
   var settingsManager = new SettingsManager(name, version, userSettings);
   windowMain.setSettingsManager(settingsManager);
   windowMain.setApiManager(apiManager);
+  windowMain.windowStats = windowStats;
   templateManager.setWindowMain(windowMain);
   templateManager.setSettingsManager(settingsManager);
+  window.addEventListener("message", (event) => {
+    if (event.data?.source === "blue-marble-pixel-placed") {
+      windowStats.recordPixel(event.data.count ?? 1);
+    }
+  });
   var bmHotkeys = (e) => {
     if (e.repeat) return;
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -3910,9 +4400,7 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
   if (Object.keys(userSettings).length == 0) {
     const uuid = crypto.randomUUID();
     console.log(uuid);
-    GM.setValue("bmUserSettings", JSON.stringify({
-      "uuid": uuid
-    }));
+    GM.setValue("bmUserSettings", JSON.stringify({ "uuid": uuid }));
   }
   setInterval(() => apiManager.sendHeartbeat(version), 1e3 * 60 * 30);
   var currentTelemetryVersion = 1;
@@ -3926,9 +4414,9 @@ Time Since Blink: ${String(Math.floor(elapsed / 6e4)).padStart(2, "0")}:${String
   windowMain.buildWindow();
   apiManager.spontaneousResponseListener(windowMain);
   observeBlack();
-  consoleLog(`%c${name}%c (${version}) userscript has loaded!`, "color: cornflowerblue;", "");
+  consoleLog(`%c${name}%c (${version}) loaded!`, "color: cornflowerblue;", "");
   function observeBlack() {
-    const observer = new MutationObserver((mutations, observer2) => {
+    const observer = new MutationObserver(() => {
       const black = document.querySelector("#color-1");
       if (!black) {
         return;
