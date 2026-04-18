@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name            Blue Marble
-// @name:en         Blue Marble
+// @name            Blue Marble Modified
+// @name:en         Blue Marble Modified
 // @namespace       https://github.com/SwingTheVine/
-// @version         0.92.0
+// @version         0.92.2
 // @description     A userscript to enhance the user experience on Wplace.live. This includes, but is not limited to: uploading images to display locally on a canvas, adding a button to move the Wplace color palette menu, and other QoL features.
 // @description:en  A userscript to enhance the user experience on Wplace.live. This includes, but is not limited to: uploading images to display locally on a canvas, adding a button to move the Wplace color palette menu, and other QoL features.
 // @author          SwingTheVine
@@ -2544,11 +2544,13 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
                 button.dataset["state"] = "hidden";
                 button.ariaLabel = `Show the color ${color.name || ""} on templates.`;
                 this.templateManager.shouldFilterColor.set(color.id, true);
+                this.templateManager.saveFilterColors();
               } else {
                 button.innerHTML = this.eyeOpen.replace("<svg", `<svg fill="${textColorForPaletteColorBackground}"`);
                 button.dataset["state"] = "shown";
                 button.ariaLabel = `Hide the color ${color.name || ""} on templates.`;
                 this.templateManager.shouldFilterColor.delete(color.id);
+                this.templateManager.saveFilterColors();
               }
               button.disabled = false;
               button.style.textDecoration = "";
@@ -2584,11 +2586,13 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
                 button.dataset["state"] = "hidden";
                 button.ariaLabel = `Show the color ${color.name || ""} on templates.`;
                 this.templateManager.shouldFilterColor.set(color.id, true);
+                this.templateManager.saveFilterColors();
               } else {
                 button.innerHTML = this.eyeOpen.replace("<svg", `<svg fill="${textColorForPaletteColorBackground}"`);
                 button.dataset["state"] = "shown";
                 button.ariaLabel = `Hide the color ${color.name || ""} on templates.`;
                 this.templateManager.shouldFilterColor.delete(color.id);
+                this.templateManager.saveFilterColors();
               }
               button.disabled = false;
               button.style.textDecoration = "";
@@ -3262,7 +3266,14 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().add
       this.templatesJSON = null;
       this.templatesShouldBeDrawn = true;
       this.templatePixelsCorrect = null;
-      this.shouldFilterColor = /* @__PURE__ */ new Map();
+      this.shouldFilterColor = (() => {
+        try {
+          const saved = JSON.parse(GM_getValue("bmFilterColors", "[]"));
+          return new Map(saved.map((id) => [id, true]));
+        } catch {
+          return /* @__PURE__ */ new Map();
+        }
+      })();
       this._tileIndexDirty = true;
       this._tileIndex = /* @__PURE__ */ new Map();
       this._tileCanvas = null;
@@ -3332,7 +3343,7 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().add
     }
     async createJSON() {
       return {
-        whoami: this.name.replace(" ", ""),
+        whoami: this.name.replaceAll(" ", ""),
         scriptVersion: this.version,
         schemaVersion: this.schemaVersion,
         templates: {}
@@ -3370,6 +3381,11 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().add
       this._tileIndexDirty = true;
       this.windowMain.handleDisplayStatus(`Template created at ${coords2.join(", ")}!`);
       await __privateMethod(this, _TemplateManager_instances, storeTemplates_fn).call(this);
+    }
+    /** Persists the current color visibility state (hidden color IDs) to GM storage. */
+    async saveFilterColors() {
+      const hiddenIDs = Array.from(this.shouldFilterColor.keys());
+      await GM.setValue("bmFilterColors", JSON.stringify(hiddenIDs));
     }
     async downloadAllTemplates() {
       for (const template of this.templatesArray) {
@@ -3569,7 +3585,7 @@ Total pixels: ${localizeNumber(totalPixels)}`
       return await this._tileCanvas.convertToBlob({ type: "image/png" });
     }
     importJSON(json) {
-      if (json?.whoami == "BlueMarble") __privateMethod(this, _TemplateManager_instances, parseBlueMarble_fn).call(this, json);
+      if (json?.whoami == this.name.replaceAll(" ", "")) __privateMethod(this, _TemplateManager_instances, parseBlueMarble_fn).call(this, json);
     }
     setTemplatesShouldBeDrawn(value) {
       this.templatesShouldBeDrawn = value;
@@ -3577,7 +3593,7 @@ Total pixels: ${localizeNumber(totalPixels)}`
   };
   _TemplateManager_instances = new WeakSet();
   storeTemplates_fn = async function() {
-    GM.setValue("bmTemplates", JSON.stringify(this.templatesJSON));
+    await GM.setValue("bmTemplates", JSON.stringify(this.templatesJSON));
   };
   calculateCorrectPixelsFast_fn = function(tile32, template32, width, height) {
     const pixelSize = this.drawMult;

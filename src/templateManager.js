@@ -35,7 +35,13 @@ export default class TemplateManager {
     this.templatesJSON = null;
     this.templatesShouldBeDrawn = true;
     this.templatePixelsCorrect = null;
-    this.shouldFilterColor = new Map();
+    // Load saved color visibility (hidden color IDs) from storage
+    this.shouldFilterColor = (() => {
+      try {
+        const saved = JSON.parse(GM_getValue('bmFilterColors', '[]'));
+        return new Map(saved.map(id => [id, true]));
+      } catch { return new Map(); }
+    })();
 
     this._tileIndexDirty = true;
     this._tileIndex = new Map();
@@ -122,7 +128,7 @@ export default class TemplateManager {
 
   async createJSON() {
     return {
-      whoami: this.name.replace(" ", ""),
+      whoami: this.name.replaceAll(" ", ""),
       scriptVersion: this.version,
       schemaVersion: this.schemaVersion,
       templates: {}
@@ -173,7 +179,13 @@ export default class TemplateManager {
   }
 
   async #storeTemplates() {
-    GM.setValue("bmTemplates", JSON.stringify(this.templatesJSON));
+    await GM.setValue("bmTemplates", JSON.stringify(this.templatesJSON));
+  }
+
+  /** Persists the current color visibility state (hidden color IDs) to GM storage. */
+  async saveFilterColors() {
+    const hiddenIDs = Array.from(this.shouldFilterColor.keys());
+    await GM.setValue('bmFilterColors', JSON.stringify(hiddenIDs));
   }
 
   async downloadAllTemplates() {
@@ -454,7 +466,7 @@ export default class TemplateManager {
   }
 
   importJSON(json) {
-    if (json?.whoami == "BlueMarble") this.#parseBlueMarble(json);
+    if (json?.whoami == this.name.replaceAll(" ", "")) this.#parseBlueMarble(json);
   }
 
   async #parseBlueMarble(json) {

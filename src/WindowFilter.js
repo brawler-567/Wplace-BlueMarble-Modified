@@ -413,11 +413,13 @@ export default class WindowFilter extends Overlay {
                     button.dataset['state'] = 'hidden';
                     button.ariaLabel = `Show the color ${color.name || ''} on templates.`;
                     this.templateManager.shouldFilterColor.set(color.id, true);
+                    this.templateManager.saveFilterColors();
                   } else {
                     button.innerHTML = this.eyeOpen.replace('<svg', `<svg fill="${textColorForPaletteColorBackground}"`);
                     button.dataset['state'] = 'shown';
                     button.ariaLabel = `Hide the color ${color.name || ''} on templates.`;
                     this.templateManager.shouldFilterColor.delete(color.id);
+                    this.templateManager.saveFilterColors();
                   }
                   button.disabled = false;
                   button.style.textDecoration = '';
@@ -462,11 +464,13 @@ export default class WindowFilter extends Overlay {
                       button.dataset['state'] = 'hidden';
                       button.ariaLabel = `Show the color ${color.name || ''} on templates.`;
                       this.templateManager.shouldFilterColor.set(color.id, true);
+                      this.templateManager.saveFilterColors();
                     } else {
                       button.innerHTML = this.eyeOpen.replace('<svg', `<svg fill="${textColorForPaletteColorBackground}"`);
                       button.dataset['state'] = 'shown';
                       button.ariaLabel = `Hide the color ${color.name || ''} on templates.`;
                       this.templateManager.shouldFilterColor.delete(color.id);
+                      this.templateManager.saveFilterColors();
                     }
                     button.disabled = false;
                     button.style.textDecoration = '';
