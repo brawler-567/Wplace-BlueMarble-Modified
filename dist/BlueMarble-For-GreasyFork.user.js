@@ -2,7 +2,7 @@
 // @name            Blue Marble Modified
 // @name:en         Blue Marble Modified
 // @namespace       https://github.com/SwingTheVine/
-// @version         0.92.2
+// @version         0.92.3
 // @description     A userscript to enhance the user experience on Wplace.live. This includes, but is not limited to: uploading images to display locally on a canvas, adding a button to move the Wplace color palette menu, and other QoL features.
 // @description:en  A userscript to enhance the user experience on Wplace.live. This includes, but is not limited to: uploading images to display locally on a canvas, adding a button to move the Wplace color palette menu, and other QoL features.
 // @author          SwingTheVine
@@ -15,14 +15,12 @@
 // @match           https://wplace.live/*
 // @grant           GM_getResourceText
 // @grant           GM_addStyle
+// @connect         yxxqmabcrffoqegdtfpr.supabase.co
 // @grant           GM.setValue
 // @grant           GM_getValue
 // @grant           GM_deleteValue
-// @grant           GM_xmlhttpRequest
 // @grant           GM.download
-// @connect         telemetry.thebluecorner.net
 // @resource        CSS-BM-File https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/2cd51bf91944ae2acb253ea5bbd76f79b7a2edd3/dist/BlueMarble-For-GreasyFork.user.css
-// @antifeature     tracking Anonymous opt-in telemetry data
 // @noframes
 // ==/UserScript==
 
@@ -37,9 +35,7 @@
   This script is provided "as is" under the MPL-2.0 license.
   The "Blue Marble" icon is licensed under CC0 1.0 Universal (CC0 1.0) Public Domain Dedication.
   The "Blue Marble" image is owned by NASA.
-*/
-
-(() => {
+*/(() => {
   var __typeError = (msg) => {
     throw TypeError(msg);
   };
@@ -348,8 +344,8 @@
      * @param {SettingsManager} settingsManager - The settingsManager class instance
      * @since 0.91.11
      */
-    setSettingsManager(settingsManager2) {
-      this.settingsManager = settingsManager2;
+    setSettingsManager(settingsManager) {
+      this.settingsManager = settingsManager;
     }
     /** Finishes building an element.
      * Call this after you are finished adding children.
@@ -1544,266 +1540,6 @@
     }
   };
 
-  // src/WindowSettings.js
-  var _WindowSettings_instances, errorOverrideFailure_fn;
-  var WindowSettings = class extends Overlay {
-    /** Constructor for the Settings window
-     * @param {string} name - The name of the userscript
-     * @param {string} version - The version of the userscript
-     * @since 0.91.11
-     * @see {@link Overlay#constructor} for examples
-     */
-    constructor(name2, version2) {
-      super(name2, version2);
-      __privateAdd(this, _WindowSettings_instances);
-      this.window = null;
-      this.windowID = "bm-window-settings";
-      this.windowParent = document.body;
-    }
-    /** Spawns a Settings window.
-     * If another settings window already exists, we DON'T spawn another!
-     * Parent/child relationships in the DOM structure below are indicated by indentation.
-     * @since 0.91.11
-     */
-    buildWindow() {
-      if (document.querySelector(`#${this.windowID}`)) {
-        document.querySelector(`#${this.windowID}`).remove();
-        return;
-      }
-      this.window = this.addDiv({ "id": this.windowID, "class": "bm-window" }).addDragbar().addButton({ "class": "bm-button-circle", "textContent": "\u25BC", "aria-label": 'Minimize window "Color Filter"', "data-button-status": "expanded" }, (instance, button) => {
-        button.onclick = () => instance.handleMinimization(button);
-        button.ontouchend = () => {
-          button.click();
-        };
-      }).buildElement().addDiv().buildElement().addDiv({ "class": "bm-flex-center" }).addButton({ "class": "bm-button-circle", "textContent": "\u2716", "aria-label": 'Close window "Color Filter"' }, (instance, button) => {
-        button.onclick = () => {
-          document.querySelector(`#${this.windowID}`)?.remove();
-        };
-        button.ontouchend = () => {
-          button.click();
-        };
-      }).buildElement().buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addDiv({ "class": "bm-container bm-center-vertically" }).addHeader(1, { "textContent": "Settings" }).buildElement().buildElement().addHr().buildElement().addP({ "textContent": "Settings take 5 seconds to save." }).buildElement().addDiv({ "class": "bm-container bm-scrollable" }, (instance, div) => {
-        this.buildHighlight();
-        this.buildTemplate();
-      }).buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
-      this.handleDrag(`#${this.windowID}.bm-window`, `#${this.windowID} .bm-dragbar`);
-    }
-    /** Builds the highlight section of the window.
-     * This should be overriden by {@link SettingsManager}
-     * @since 0.91.11
-     */
-    buildHighlight() {
-      __privateMethod(this, _WindowSettings_instances, errorOverrideFailure_fn).call(this, "Pixel Highlight");
-    }
-    /** Builds the template section of the window.
-     * This should be overriden by {@link SettingsManager}
-     * @since 0.91.68
-     */
-    buildTemplate() {
-      __privateMethod(this, _WindowSettings_instances, errorOverrideFailure_fn).call(this, "Template");
-    }
-  };
-  _WindowSettings_instances = new WeakSet();
-  /** Displays an error when a settings category fails to load.
-   * @param {string} name - The name of the category
-   * @since 0.91.11
-   */
-  errorOverrideFailure_fn = function(name2) {
-    this.window = this.addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": name2 }).buildElement().addHr().buildElement().addP({ "innerHTML": `An error occured loading the ${name2} category. <code>SettingsManager</code> failed to override the ${name2} function inside <code>WindowSettings</code>.` }).buildElement().buildElement();
-  };
-
-  // src/settingsManager.js
-  var _SettingsManager_instances, updateHighlightSettings_fn, updateHighlightToPreset_fn;
-  var SettingsManager = class extends WindowSettings {
-    /** Constructor for the SettingsManager class
-     * @param {string} name - The name of the userscript
-     * @param {string} version - The version of the userscript
-     * @param {Object} userSettings - The user settings as an object
-     * @since 0.91.11
-     */
-    constructor(name2, version2, userSettings2) {
-      var _a;
-      super(name2, version2);
-      __privateAdd(this, _SettingsManager_instances);
-      this.userSettings = userSettings2;
-      (_a = this.userSettings).flags ?? (_a.flags = []);
-      this.userSettingsOld = structuredClone(this.userSettings);
-      this.userSettingsSaveLocation = "bmUserSettings";
-      this.updateFrequency = 5e3;
-      this.lastUpdateTime = 0;
-      setInterval(this.updateUserStorage.bind(this), this.updateFrequency);
-    }
-    /** Updates the user settings in userscript storage
-     * @since 0.91.39
-     */
-    async updateUserStorage() {
-      const userSettingsCurrent = JSON.stringify(this.userSettings);
-      const userSettingsOld = JSON.stringify(this.userSettingsOld);
-      if (userSettingsCurrent != userSettingsOld && Date.now() - this.lastUpdateTime > this.updateFrequency) {
-        await GM.setValue(this.userSettingsSaveLocation, userSettingsCurrent);
-        this.userSettingsOld = structuredClone(this.userSettings);
-        this.lastUpdateTime = Date.now();
-        console.log(userSettingsCurrent);
-      }
-    }
-    /** Toggles a boolean flag to the state that was passed in.
-     * If no state was passed in, the flag will flip to the opposite state.
-     * The existence of the flag determines its state. If it exists, it is `true`.
-     * @param {string} flagName - The name of the flag to toggle
-     * @param {boolean} [state=undefined] - (Optional) The state to change the flag to
-     * @since 0.91.60
-     */
-    toggleFlag(flagName, state = void 0) {
-      const flagIndex = this.userSettings?.flags?.indexOf(flagName) ?? -1;
-      if (flagIndex != -1 && state !== true) {
-        this.userSettings?.flags?.splice(flagIndex, 1);
-      } else if (flagIndex == -1 && state !== false) {
-        this.userSettings?.flags?.push(flagName);
-      }
-    }
-    // This is one of the most insane OOP setups I have ever laid my eyes on
-    /** Builds the "highlight" category of the settings window
-     * @since 0.91.18
-     * @see WindowSettings#buildHighlight
-     */
-    buildHighlight() {
-      const highlightPresetOff = '<svg viewBox="0 0 3 3"><path d="M0,0H3V3H0ZM0,1H3M0,2H3M1,0V3M2,0V3" fill="#fff"/><path d="M1,1H2V2H1Z" fill="#2f4f4f"/></svg>';
-      const highlightPresetCross = '<svg viewBox="0 0 3 3"><path d="M0,0H3V3H0Z" fill="#fff"/><path d="M1,0H2V1H3V2H2V3H1V2H0V1H1Z" fill="brown"/><path d="M1,1H2V2H1Z" fill="#2f4f4f"/></svg>';
-      const storedHighlight = this.userSettings?.highlight ?? [[1, 0, 1], [2, 0, 0], [1, -1, 0], [1, 1, 0], [1, 0, -1]];
-      this.window = this.addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Pixel Highlight" }).buildElement().addHr().buildElement().addDiv({ "class": "bm-container", "style": "margin-left: 1.5ch;" }).addCheckbox({ "textContent": "Highlight transparent pixels" }, (instance, label, checkbox) => {
-        checkbox.checked = !this.userSettings?.flags?.includes("hl-noTrans");
-        checkbox.onchange = (event) => this.toggleFlag("hl-noTrans", !event.target.checked);
-      }).buildElement().addP({ "id": "bm-highlight-preset-label", "textContent": "Choose a preset:", "style": "font-weight: 700;" }).buildElement().addDiv({ "class": "bm-flex-center", "role": "group", "aria-labelledby": "bm-highlight-preset-label" }).addDiv({ "class": "bm-highlight-preset-container" }).addSpan({ "textContent": "None" }).buildElement().addButton({ "innerHTML": highlightPresetOff, "aria-label": 'Preset "None"' }, (instance, button) => {
-        button.onclick = () => __privateMethod(this, _SettingsManager_instances, updateHighlightToPreset_fn).call(this, "None");
-      }).buildElement().buildElement().addDiv({ "class": "bm-highlight-preset-container" }).addSpan({ "textContent": "Cross" }).buildElement().addButton({ "innerHTML": highlightPresetCross, "aria-label": 'Preset "Cross Shape"' }, (instance, button) => {
-        button.onclick = () => __privateMethod(this, _SettingsManager_instances, updateHighlightToPreset_fn).call(this, "Cross");
-      }).buildElement().buildElement().addDiv({ "class": "bm-highlight-preset-container" }).addSpan({ "textContent": "X" }).buildElement().addButton({ "innerHTML": highlightPresetCross.replace('d="M1,0H2V1H3V2H2V3H1V2H0V1H1Z"', 'd="M0,0V1H3V0H2V3H3V2H0V3H1V0Z"'), "aria-label": 'Preset "X Shape"' }, (instance, button) => {
-        button.onclick = () => __privateMethod(this, _SettingsManager_instances, updateHighlightToPreset_fn).call(this, "X");
-      }).buildElement().buildElement().addDiv({ "class": "bm-highlight-preset-container" }).addSpan({ "textContent": "Full" }).buildElement().addButton({ "innerHTML": highlightPresetOff.replace("#fff", "#2f4f4f"), "aria-label": 'Preset "Full Template"' }, (instance, button) => {
-        button.onclick = () => __privateMethod(this, _SettingsManager_instances, updateHighlightToPreset_fn).call(this, "Full");
-      }).buildElement().buildElement().buildElement().addP({ "id": "bm-highlight-grid-label", "textContent": "Create a custom pattern:", "style": "font-weight: 700;" }).buildElement().addDiv({ "class": "bm-highlight-grid", "role": "group", "aria-labelledby": "bm-highlight-grid-label" });
-      for (let buttonY = -1; buttonY <= 1; buttonY++) {
-        for (let buttonX = -1; buttonX <= 1; buttonX++) {
-          const buttonState = storedHighlight[storedHighlight.findIndex(([, x, y]) => x == buttonX && y == buttonY)]?.[0] ?? 0;
-          let buttonStateName = "Disabled";
-          if (buttonState == 1) {
-            buttonStateName = "Incorrect";
-          } else if (buttonState == 2) {
-            buttonStateName = "Template";
-          }
-          this.window = this.addButton({
-            "data-status": buttonStateName,
-            "aria-label": `Sub-pixel ${buttonStateName.toLowerCase()}`
-          }, (instance, button) => {
-            button.onclick = () => __privateMethod(this, _SettingsManager_instances, updateHighlightSettings_fn).call(this, button, [buttonX, buttonY]);
-          }).buildElement();
-        }
-      }
-      this.window = this.buildElement().buildElement().buildElement();
-    }
-    /** Build the "template" category of settings window
-     * @since 0.91.68
-     * @see WindowSettings#buildTemplate
-     */
-    buildTemplate() {
-      this.window = this.addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Pixel Highlight" }).buildElement().addHr().buildElement().addDiv({ "class": "bm-container", "style": "margin-left: 1.5ch;" }).addCheckbox({ "textContent": "Template creation should skip transparent tiles" }, (instance, label, checkbox) => {
-        checkbox.checked = !this.userSettings?.flags?.includes("hl-noSkip");
-        checkbox.onchange = (event) => this.toggleFlag("hl-noSkip", !event.target.checked);
-      }).buildElement().addCheckbox({ "innerHTML": "Experimental: Template creation should <em>aggressively</em> skip transparent tiles" }, (instance, label, checkbox) => {
-        checkbox.checked = this.userSettings?.flags?.includes("hl-agSkip");
-        checkbox.onchange = (event) => this.toggleFlag("hl-agSkip", event.target.checked);
-      }).buildElement().buildElement().buildElement();
-    }
-  };
-  _SettingsManager_instances = new WeakSet();
-  /** Updates the display of the highlight buttons in the settings window.
-   * Additionally, it will update user settings with the new selection.
-   * @param {HTMLButtonElement} button - The button that was pressed
-   * @param {Array<number, number>} coords - The relative coordinates of the button
-   * @since 0.91.46
-   */
-  updateHighlightSettings_fn = function(button, coords2) {
-    button.disabled = true;
-    const status = button.dataset["status"];
-    const userStorageOld = this.userSettings?.highlight ?? [[1, 0, 1], [2, 0, 0], [1, -1, 0], [1, 1, 0], [1, 0, -1]];
-    let userStorageChange = [2, 0, 0];
-    const userStorageNew = userStorageOld;
-    switch (status) {
-      // If the button was in the "Disabled" state
-      case "Disabled":
-        button.dataset["status"] = "Incorrect";
-        button.ariaLabel = "Sub-pixel incorrect";
-        userStorageChange = [1, ...coords2];
-        break;
-      // If the button was in the "Incorrect" state
-      case "Incorrect":
-        button.dataset["status"] = "Template";
-        button.ariaLabel = "Sub-pixel template";
-        userStorageChange = [2, ...coords2];
-        break;
-      // If the button was in the "Template" state
-      case "Template":
-        button.dataset["status"] = "Disabled";
-        button.ariaLabel = "Sub-pixel disabled";
-        userStorageChange = [0, ...coords2];
-        break;
-    }
-    const indexOfChange = userStorageOld.findIndex(([, x, y]) => x == userStorageChange[1] && y == userStorageChange[2]);
-    if (userStorageChange[0] != 0) {
-      if (indexOfChange != -1) {
-        userStorageNew[indexOfChange] = userStorageChange;
-      } else {
-        userStorageNew.push(userStorageChange);
-      }
-    } else if (indexOfChange != -1) {
-      userStorageNew.splice(indexOfChange, 1);
-    }
-    this.userSettings["highlight"] = userStorageNew;
-    button.disabled = false;
-  };
-  updateHighlightToPreset_fn = async function(preset) {
-    const presetButtons = document.querySelectorAll(".bm-highlight-preset-container button");
-    for (const button of presetButtons) {
-      button.disabled = true;
-    }
-    let presetArray = [0, 0, 0, 0, 2, 0, 0, 0, 0];
-    switch (preset) {
-      case "Cross":
-        presetArray = [0, 1, 0, 1, 2, 1, 0, 1, 0];
-        break;
-      case "X":
-        presetArray = [1, 0, 1, 0, 2, 0, 1, 0, 1];
-        break;
-      case "Full":
-        presetArray = [2, 2, 2, 2, 2, 2, 2, 2, 2];
-        break;
-    }
-    const buttons = document.querySelector(".bm-highlight-grid")?.childNodes ?? [];
-    for (let buttonIndex = 0; buttonIndex < buttons.length; buttonIndex++) {
-      const button = buttons[buttonIndex];
-      let buttonState = button.dataset["status"];
-      buttonState = buttonState != "Disabled" ? buttonState != "Incorrect" ? 2 : 1 : 0;
-      let buttonStateDelta = presetArray[buttonIndex] - buttonState;
-      if (buttonStateDelta == 0) {
-        continue;
-      }
-      buttonStateDelta += buttonStateDelta < 0 ? 3 : 0;
-      button.click();
-      if (buttonStateDelta == 2) {
-        for (let timeWaited = 0; timeWaited < 200; timeWaited += 10) {
-          if (!button.disabled) {
-            break;
-          }
-          await sleep(10);
-        }
-        button.click();
-      }
-    }
-    for (const button of presetButtons) {
-      button.disabled = false;
-    }
-  };
-
   // src/Template.js
   var _Template_instances, calculateTotalPixelsFromImageData_fn;
   var Template = class {
@@ -2219,7 +1955,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
   };
 
   // src/WindowFilter.js
-  var _WindowFilter_instances, buildColorList_fn, sortColorList_fn, selectColorList_fn, calculatePixelStatistics_fn;
+  var _WindowFilter_instances, detectOwnedColors_fn, buildColorList_fn, sortColorList_fn, selectColorList_fn, calculatePixelStatistics_fn;
   var WindowFilter = class extends Overlay {
     /** Constructor for the color filter window
      * @param {*} executor - The executing class
@@ -2238,6 +1974,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       this.eyeClosed = '<svg viewBox="0 1 12 6"><mask id="a"><path d="M0,0H12V8L0,2" fill="#fff"/></mask><path d="M0,4Q6-2 12,4Q6,10 0,4H4A2,2 0 1 0 6,2Q6,4 4,4ZM1,2L10,6.5L9.5,7L.5,2.5" mask="url(#a)"/></svg>';
       const { palette, LUT: _ } = this.templateManager.paletteBM;
       this.palette = palette;
+      this.ownedColorIDs = null;
       this.tilesLoadedTotal = 0;
       this.tilesTotal = 0;
       this.allPixelsColor = /* @__PURE__ */ new Map();
@@ -2313,6 +2050,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       }).buildElement().buildElement().buildElement().buildElement().buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
       this.handleDrag(`#${this.windowID}.bm-window`, `#${this.windowID} .bm-dragbar`);
       const scrollableContainer = document.querySelector(`#${this.windowID} .bm-container.bm-scrollable`);
+      this.ownedColorIDs = __privateMethod(this, _WindowFilter_instances, detectOwnedColors_fn).call(this);
       scrollableContainer.addEventListener("scroll", () => {
         this.savedScrollTop = scrollableContainer.scrollTop;
         GM.setValue("bmFilterSettings", JSON.stringify({
@@ -2388,6 +2126,7 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       }).buildElement().buildElement().addDiv({ "class": "bm-container bm-scrollable" }).buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
       this.handleDrag(`#${this.windowID}.bm-window`, `#${this.windowID} .bm-dragbar`);
       const scrollableContainer = document.querySelector(`#${this.windowID} .bm-container.bm-scrollable`);
+      this.ownedColorIDs = __privateMethod(this, _WindowFilter_instances, detectOwnedColors_fn).call(this);
       scrollableContainer.addEventListener("scroll", () => {
         this.savedScrollTop = scrollableContainer.scrollTop;
         GM.setValue("bmFilterSettings", JSON.stringify({
@@ -2493,6 +2232,42 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
    * @param {HTMLElement} parentElement - Parent element to add the color list to as a child
    * @since 0.88.222
    */
+  /** Detects which colors the player owns by reading Wplace's color palette DOM.
+   * Wplace marks unowned colors with Tailwind class "text-base-content/60"
+   * (reduced opacity text) on the color button inside #color-{id}.
+   * Returns null if all colors are owned (badges are hidden).
+   * @returns {Set<number>|null}
+   * @since 0.88.600
+   */
+  detectOwnedColors_fn = function() {
+    const owned = /* @__PURE__ */ new Set();
+    const notOwned = /* @__PURE__ */ new Set();
+    let domDetected = false;
+    for (const color of this.palette) {
+      if (!color.id || color.id < 0) continue;
+      const el = document.querySelector(`#color-${color.id}`);
+      if (!el) continue;
+      domDetected = true;
+      const btn = el.querySelector("button") ?? el;
+      const classList = (btn.className ?? "") + " " + (el.className ?? "");
+      const isLocked = btn.disabled || btn.getAttribute("aria-disabled") === "true" || classList.includes("text-base-content/60") || classList.includes("/60") || // Tailwind opacity shorthand
+      classList.includes("opacity-60") || classList.includes("opacity-50") || classList.includes("cursor-not-allowed");
+      if (isLocked) {
+        notOwned.add(color.id);
+      } else {
+        owned.add(color.id);
+      }
+    }
+    if (!domDetected) {
+      for (const color of this.palette) {
+        if (!color.id || color.id < 0) continue;
+        if (color.premium) notOwned.add(color.id);
+        else owned.add(color.id);
+      }
+    }
+    if (notOwned.size === 0) return null;
+    return owned;
+  };
   buildColorList_fn = function(parentElement) {
     const isWindowedMode = parentElement.closest(`#${this.windowID}`)?.classList.contains("bm-windowed");
     console.log(`Is Windowed Mode: ${isWindowedMode}`);
@@ -2559,7 +2334,17 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
               button.disabled = true;
             }
           }
-        ).buildElement().addSmall({ "textContent": `#${color.id.toString().padStart(2, 0)}`, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}` }).buildElement().addHeader(2, { "textContent": color.name, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}` }).buildElement().addSmall({ "class": "bm-filter-color-pxl-cnt", "textContent": `${colorCorrectLocalized} / ${colorTotalLocalized}`, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}; flex: 1 1 auto; text-align: right;` }).buildElement().buildElement().buildElement();
+        ).buildElement().addSmall({ "textContent": `#${color.id.toString().padStart(2, 0)}`, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}` }).buildElement().addHeader(2, { "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}; display:flex; align-items:center; gap:0.4ch;` }, (instance, h2) => {
+          h2.textContent = color.name;
+          if (this.ownedColorIDs !== null && color.id > 0) {
+            const badge = document.createElement("span");
+            const isOwned = this.ownedColorIDs.has(color.id);
+            badge.textContent = isOwned ? "\u2713" : "\u2717";
+            badge.title = isOwned ? "You own this color" : "You don't own this color";
+            badge.style.cssText = `font-size:0.75em; font-weight:700; opacity:0.9; color:${isOwned ? "#4ade80" : "#f87171"};`;
+            h2.appendChild(badge);
+          }
+        }).buildElement().addSmall({ "class": "bm-filter-color-pxl-cnt", "textContent": `${colorCorrectLocalized} / ${colorTotalLocalized}`, "style": `color: ${color.id == -1 || color.id == 0 ? "white" : textColorForPaletteColorBackground}; flex: 1 1 auto; text-align: right;` }).buildElement().buildElement().buildElement();
       } else {
         colorList.addDiv({
           "class": "bm-container bm-filter-color bm-flex-between",
@@ -2601,7 +2386,17 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
               button.disabled = true;
             }
           }
-        ).buildElement().buildElement().addSmall({ "textContent": color.id == -2 ? "???????" : colorValueHex }).buildElement().buildElement().addDiv({ "class": "bm-flex-between" }).addHeader(2, { "textContent": (color.premium ? "\u2605 " : "") + color.name }).buildElement().addDiv({ "class": "bm-flex-between", "style": "gap: 1.5ch;" }).addSmall({ "textContent": `#${color.id.toString().padStart(2, 0)}` }).buildElement().addSmall({ "class": "bm-filter-color-pxl-cnt", "textContent": `${colorCorrectLocalized} / ${colorTotalLocalized}` }).buildElement().buildElement().addP({ "class": "bm-filter-color-pxl-desc", "textContent": `${typeof colorIncorrect == "number" && !isNaN(colorIncorrect) ? colorIncorrect : "???"} incorrect pixel${colorIncorrect == 1 ? "" : "s"}. Completed: ${colorPercent}` }).buildElement().buildElement().buildElement();
+        ).buildElement().buildElement().addSmall({ "textContent": color.id == -2 ? "???????" : colorValueHex }).buildElement().buildElement().addDiv({ "class": "bm-flex-between" }).addHeader(2, { "style": "display:flex; align-items:center; gap:0.4ch;" }, (instance, h2) => {
+          h2.textContent = (color.premium ? "\u2605 " : "") + color.name;
+          if (this.ownedColorIDs !== null && color.id > 0) {
+            const badge = document.createElement("span");
+            const isOwned = this.ownedColorIDs.has(color.id);
+            badge.textContent = isOwned ? "\u2713" : "\u2717";
+            badge.title = isOwned ? "You own this color" : "You don't own this color";
+            badge.style.cssText = `font-size:0.75em; font-weight:700; opacity:0.9; color:${isOwned ? "#4ade80" : "#f87171"};`;
+            h2.appendChild(badge);
+          }
+        }).buildElement().addDiv({ "class": "bm-flex-between", "style": "gap: 1.5ch;" }).addSmall({ "textContent": `#${color.id.toString().padStart(2, 0)}` }).buildElement().addSmall({ "class": "bm-filter-color-pxl-cnt", "textContent": `${colorCorrectLocalized} / ${colorTotalLocalized}` }).buildElement().buildElement().addP({ "class": "bm-filter-color-pxl-desc", "textContent": `${typeof colorIncorrect == "number" && !isNaN(colorIncorrect) ? colorIncorrect : "???"} incorrect pixel${colorIncorrect == 1 ? "" : "s"}. Completed: ${colorPercent}` }).buildElement().buildElement().buildElement();
       }
     }
     colorList.buildOverlay(parentElement);
@@ -3033,6 +2828,207 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
     }
   };
 
+  // src/WindowLeaderboard.js
+  var SUPABASE_URL = "https://yxxqmabcrffoqegdtfpr.supabase.co";
+  var SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4eHFtYWJjcmZmb3FlZ2R0ZnByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEzNDQ3NzcsImV4cCI6MjA3NjkyMDc3N30.0L8en_UyCCyDsqrQ6Ympt5ZsPDv3DujmYmaCbsZ5b0Y";
+  var TABLE = "leaderboard";
+  var REFRESH_MS = 5 * 60 * 1e3;
+  var _WindowLeaderboard_instances, today_fn, thisWeek_fn, thisMonth_fn, sbFetch_fn, sync_fn, render_fn, esc_fn, activateTab_fn;
+  var WindowLeaderboard = class extends Overlay {
+    constructor(executor) {
+      super(executor.name, executor.version);
+      __privateAdd(this, _WindowLeaderboard_instances);
+      this.window = null;
+      this.windowID = "bm-window-leaderboard";
+      this.windowParent = document.body;
+      this.windowStats = executor.windowStats;
+      this.apiManager = executor.apiManager;
+      this._tab = "day";
+      this._rows = [];
+      this._intervalID = null;
+      this._myID = null;
+      this._myName = null;
+    }
+    async refresh() {
+      const list = document.querySelector(`#${this.windowID} .bm-lb-list`);
+      if (list) list.innerHTML = '<small style="color:lightgray;padding:0.3em 0;display:block">Loading...</small>';
+      await __privateMethod(this, _WindowLeaderboard_instances, sync_fn).call(this);
+      __privateMethod(this, _WindowLeaderboard_instances, render_fn).call(this);
+    }
+    // ─── Build ────────────────────────────────────────────────────────────────
+    buildWindow() {
+      const existing = document.querySelector(`#${this.windowID}`);
+      if (existing) {
+        existing.remove();
+        if (this._intervalID) {
+          clearInterval(this._intervalID);
+          this._intervalID = null;
+        }
+        return;
+      }
+      this.window = this.addDiv({
+        "id": this.windowID,
+        "class": "bm-window bm-windowed",
+        "style": "top: 10px; left: unset; right: 385px; width: 280px;"
+      }).addDragbar().addButton({
+        "class": "bm-button-circle",
+        "textContent": "\u25BC",
+        "aria-label": "Minimize Leaderboard",
+        "data-button-status": "expanded"
+      }, (instance, button) => {
+        button.onclick = () => instance.handleMinimization(button);
+        button.ontouchend = () => {
+          button.click();
+        };
+      }).buildElement().addDiv().buildElement().buildElement().addDiv({ "class": "bm-window-content" }).addDiv({ "class": "bm-container" }).addHeader(1, { "textContent": "\u{1F3C6} Leaderboard" }).buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container", "style": "display:flex; gap:0.3ch; margin-bottom:0;" }, (instance, div) => {
+        const tabDefs = [["day", "Day"], ["week", "Week"], ["month", "Month"]];
+        const btns = [];
+        tabDefs.forEach(([key, label]) => {
+          const btn = document.createElement("button");
+          btn.textContent = label;
+          btn.dataset.tab = key;
+          btn.style.cssText = "flex:1; font-size:small; padding:0 0.3ch; border-radius:1em;";
+          btn.style.background = key === "day" ? "#1061e5" : "#0e3a8a";
+          btn.onclick = () => __privateMethod(this, _WindowLeaderboard_instances, activateTab_fn).call(this, key, btns);
+          btns.push(btn);
+          div.appendChild(btn);
+        });
+      }).buildElement().addDiv({
+        "class": "bm-container bm-scrollable bm-lb-list",
+        "style": "max-height:300px; padding:0; margin-top:0.3em;"
+      }, (instance, div) => {
+        div.innerHTML = '<small style="color:lightgray">Loading...</small>';
+      }).buildElement().addDiv({ "class": "bm-container bm-flex-between", "style": "margin-bottom:0;" }).addSmall({ "class": "bm-lb-ts", "textContent": "\u2014" }).buildElement().addButton({ "textContent": "\u21BB Refresh", "style": "font-size:x-small;" }, (instance, button) => {
+        button.onclick = async () => {
+          button.disabled = true;
+          await this.refresh();
+          button.disabled = false;
+        };
+      }).buildElement().buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
+      this.handleDrag(`#${this.windowID}.bm-window`, `#${this.windowID} .bm-dragbar`);
+      this.refresh();
+      this._intervalID = setInterval(() => this.refresh(), REFRESH_MS);
+    }
+  };
+  _WindowLeaderboard_instances = new WeakSet();
+  // ─── Date helpers ─────────────────────────────────────────────────────────
+  today_fn = function() {
+    const d = /* @__PURE__ */ new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  thisWeek_fn = function() {
+    const d = /* @__PURE__ */ new Date();
+    const jan4 = new Date(d.getFullYear(), 0, 4);
+    const week = Math.ceil(((d - jan4) / 864e5 + jan4.getDay() + 1) / 7);
+    return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
+  };
+  thisMonth_fn = function() {
+    const d = /* @__PURE__ */ new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+  sbFetch_fn = async function(path, options = {}) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      ...options,
+      headers: {
+        "apikey": SUPABASE_ANON,
+        "Authorization": `Bearer ${SUPABASE_ANON}`,
+        "Content-Type": "application/json",
+        "Prefer": options.prefer ?? "",
+        ...options.headers ?? {}
+      }
+    });
+    if (!res.ok) throw new Error(`Supabase ${res.status}: ${await res.text()}`);
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  };
+  sync_fn = async function() {
+    this._myID = this.apiManager?.myID ?? null;
+    this._myName = this.apiManager?.myName ?? "Player";
+    if (!this._myID) return;
+    const stats = this.windowStats?.stats;
+    const todayPx = stats?.hourly?.reduce((a, b) => a + b, 0) ?? 0;
+    const weekPx = stats?.weekTotal ?? todayPx;
+    const monthPx = stats?.monthTotal ?? todayPx;
+    const upsertBody = '{"user_id":' + JSON.stringify(String(this._myID)) + ',"username":' + JSON.stringify(String(this._myName)) + ',"px_day":' + todayPx + ',"px_week":' + weekPx + ',"px_month":' + monthPx + ',"day_period":' + JSON.stringify(__privateMethod(this, _WindowLeaderboard_instances, today_fn).call(this)) + ',"week_period":' + JSON.stringify(__privateMethod(this, _WindowLeaderboard_instances, thisWeek_fn).call(this)) + ',"month_period":' + JSON.stringify(__privateMethod(this, _WindowLeaderboard_instances, thisMonth_fn).call(this)) + "}";
+    await __privateMethod(this, _WindowLeaderboard_instances, sbFetch_fn).call(this, `${TABLE}?on_conflict=user_id`, {
+      method: "POST",
+      prefer: "resolution=merge-duplicates",
+      headers: { "Prefer": "resolution=merge-duplicates" },
+      body: "[" + upsertBody + "]"
+    }).catch((e) => console.error("LB upsert error:", e));
+    const col = this._tab === "day" ? "px_day" : this._tab === "week" ? "px_week" : "px_month";
+    const rows = await __privateMethod(this, _WindowLeaderboard_instances, sbFetch_fn).call(this, `${TABLE}?select=user_id,username,px_day,px_week,px_month,day_period,week_period,month_period&order=${col}.desc&limit=200`).catch(() => null);
+    if (rows) this._rows = rows;
+  };
+  // ─── Rendering ────────────────────────────────────────────────────────────
+  render_fn = function() {
+    const container = document.querySelector(`#${this.windowID} .bm-lb-list`);
+    if (!container) return;
+    const tab = this._tab;
+    const today = __privateMethod(this, _WindowLeaderboard_instances, today_fn).call(this);
+    const week = __privateMethod(this, _WindowLeaderboard_instances, thisWeek_fn).call(this);
+    const month = __privateMethod(this, _WindowLeaderboard_instances, thisMonth_fn).call(this);
+    const pxField = tab === "day" ? "px_day" : tab === "week" ? "px_week" : "px_month";
+    const perField = tab === "day" ? "day_period" : tab === "week" ? "week_period" : "month_period";
+    const curPeriod = tab === "day" ? today : tab === "week" ? week : month;
+    const filtered = this._rows.filter((r) => r[perField] === curPeriod && r[pxField] > 0).sort((a, b) => b[pxField] - a[pxField]);
+    const myIdx = filtered.findIndex((r) => String(r.user_id) === String(this._myID));
+    const myRank = myIdx >= 0 ? myIdx + 1 : null;
+    const myPx = myIdx >= 0 ? filtered[myIdx][pxField] : (tab === "day" ? this.windowStats?.stats?.hourly?.reduce((a, b) => a + b, 0) : tab === "week" ? this.windowStats?.stats?.weekTotal : this.windowStats?.stats?.monthTotal) ?? 0;
+    const top99 = filtered.slice(0, 99);
+    const medals = ["\u{1F947}", "\u{1F948}", "\u{1F949}"];
+    container.innerHTML = "";
+    if (top99.length === 0) {
+      const msg = document.createElement("small");
+      msg.style.cssText = "color:lightgray; padding:0.5em 0; display:block;";
+      msg.textContent = "No data for this period yet. Place some pixels!";
+      container.appendChild(msg);
+    }
+    top99.forEach((row, i) => {
+      const rank = i + 1;
+      const isMe = String(row.user_id) === String(this._myID);
+      const el = document.createElement("div");
+      el.style.cssText = [
+        "display:flex; align-items:center; gap:0.5ch;",
+        "padding:0.2em 0.4em; border-radius:3px; font-size:small;",
+        "border-bottom:1px solid rgba(255,255,255,0.05);",
+        isMe ? "background:rgba(100,180,255,0.15); font-weight:700;" : ""
+      ].join("");
+      el.innerHTML = [
+        `<span style="width:2.5ch;text-align:right;opacity:0.6;flex-shrink:0">${medals[i] ?? rank}</span>`,
+        `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${__privateMethod(this, _WindowLeaderboard_instances, esc_fn).call(this, row.username)}${isMe ? " \u25C0" : ""}</span>`,
+        `<span style="opacity:0.85;flex-shrink:0">${Number(row[pxField]).toLocaleString()} px</span>`
+      ].join("");
+      container.appendChild(el);
+    });
+    const mySlot = document.createElement("div");
+    mySlot.style.cssText = [
+      "display:flex; align-items:center; gap:0.5ch;",
+      "padding:0.2em 0.4em; border-radius:3px; font-size:small; font-weight:700;",
+      "background:rgba(255,210,0,0.12); border-top:1px solid rgba(255,210,0,0.3); margin-top:3px;"
+    ].join("");
+    const label = myRank !== null && myRank <= 99 ? "\u2605" : myRank ?? "?";
+    mySlot.innerHTML = [
+      `<span style="width:2.5ch;text-align:right;opacity:0.7;flex-shrink:0">${label}</span>`,
+      `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${__privateMethod(this, _WindowLeaderboard_instances, esc_fn).call(this, this._myName ?? "You")} \u25C0 you</span>`,
+      `<span style="opacity:0.85;flex-shrink:0">${Number(myPx).toLocaleString()} px</span>`
+    ].join("");
+    container.appendChild(mySlot);
+    const ts = document.querySelector(`#${this.windowID} .bm-lb-ts`);
+    if (ts) ts.textContent = `Updated: ${(/* @__PURE__ */ new Date()).toLocaleTimeString()}`;
+  };
+  esc_fn = function(s) {
+    return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  };
+  activateTab_fn = function(tab, btns) {
+    this._tab = tab;
+    btns.forEach((b) => {
+      b.style.background = b.dataset.tab === tab ? "#1061e5" : "#0e3a8a";
+      b.style.fontWeight = b.dataset.tab === tab ? "700" : "";
+    });
+    __privateMethod(this, _WindowLeaderboard_instances, render_fn).call(this);
+  };
+
   // src/WindowMain.js
   var _WindowMain_instances, buildWindowFilter_fn, coordinateInputPaste_fn;
   var WindowMain = class extends Overlay {
@@ -3155,9 +3151,21 @@ Getting Y ${pixelY}-${pixelY + drawSizeY}`);
       }).buildElement().addButton({ "textContent": "Filter" }, (instance, button) => {
         button.onclick = () => __privateMethod(this, _WindowMain_instances, buildWindowFilter_fn).call(this);
       }).buildElement().buildElement().addDiv({ "class": "bm-container" }).addTextarea({ "id": this.outputStatusId, "placeholder": `Status: Sleeping...
-Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().addDiv({ "class": "bm-container bm-flex-between", "style": "margin-bottom: 0; flex-direction: column;" }).addDiv({ "class": "bm-flex-between" }).addButton({ "class": "bm-button-circle", "innerHTML": "\u2699\uFE0F", "title": "Settings" }, (instance, button) => {
+Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().addDiv({ "class": "bm-container bm-flex-between", "style": "margin-bottom: 0; flex-direction: column;" }).addDiv({ "class": "bm-flex-between" }).addButton({ "class": "bm-button-circle", "innerHTML": "\u{1F3C6}", "title": "Leaderboard", "data-active": "false" }, (instance, button) => {
         button.onclick = () => {
-          instance.settingsManager.buildWindow();
+          const lbWindow = document.querySelector("#bm-window-leaderboard");
+          if (lbWindow) {
+            lbWindow.remove();
+            if (instance._leaderboardInstance?._intervalID) clearInterval(instance._leaderboardInstance._intervalID);
+            instance._leaderboardInstance = null;
+            button.dataset["active"] = "false";
+            button.style.outline = "";
+          } else {
+            instance._leaderboardInstance = new WindowLeaderboard(instance);
+            instance._leaderboardInstance.buildWindow();
+            button.dataset["active"] = "true";
+            button.style.outline = "2px solid #ffd200";
+          }
         };
       }).buildElement().addButton({ "class": "bm-button-circle", "innerHTML": "\u{1F4CA}", "title": "Pixel Statistics", "data-active": "false" }, (instance, button) => {
         button.onclick = () => {
@@ -3290,8 +3298,8 @@ Version: ${this.version}`, "readOnly": true }).buildElement().buildElement().add
     setWindowMain(windowMain2) {
       this.windowMain = windowMain2;
     }
-    setSettingsManager(settingsManager2) {
-      this.settingsManager = settingsManager2;
+    setSettingsManager(settingsManager) {
+      this.settingsManager = settingsManager;
     }
     toggleXMode() {
       this.xModeEnabled = !this.xModeEnabled;
@@ -3585,7 +3593,12 @@ Total pixels: ${localizeNumber(totalPixels)}`
       return await this._tileCanvas.convertToBlob({ type: "image/png" });
     }
     importJSON(json) {
-      if (json?.whoami == this.name.replaceAll(" ", "")) __privateMethod(this, _TemplateManager_instances, parseBlueMarble_fn).call(this, json);
+      const storedWhoami = json?.whoami ?? "";
+      const currentWhoami = this.name.replaceAll(" ", "");
+      const knownNames = ["BlueMarble", "BlueMarbleModified", currentWhoami];
+      if (storedWhoami && knownNames.some((n) => storedWhoami.toLowerCase() === n.toLowerCase())) {
+        __privateMethod(this, _TemplateManager_instances, parseBlueMarble_fn).call(this, json);
+      }
     }
     setTemplatesShouldBeDrawn(value) {
       this.templatesShouldBeDrawn = value;
@@ -3819,6 +3832,8 @@ Could not fetch userdata.`);
               ));
             }
             this.templateManager.userID = dataJSON["id"];
+            this.myID = dataJSON["id"];
+            this.myName = dataJSON["name"] ?? dataJSON["username"] ?? dataJSON["displayName"] ?? "Player";
             if (this.chargeRefillTimerID.length != 0) {
               const chargeRefillTimer = document.querySelector("#" + this.chargeRefillTimerID);
               if (chargeRefillTimer) {
@@ -3891,40 +3906,6 @@ Did you try clicking the canvas first?`);
         }
       });
     }
-    // Sends a heartbeat to the telemetry server
-    async sendHeartbeat(version2) {
-      console.log("Sending heartbeat to telemetry server...");
-      let userSettings2 = GM_getValue("bmUserSettings", "{}");
-      userSettings2 = JSON.parse(userSettings2);
-      if (!userSettings2 || !userSettings2.telemetry || !userSettings2.uuid) {
-        console.log("Telemetry is disabled, not sending heartbeat.");
-        return;
-      }
-      const ua = navigator.userAgent;
-      let browser = await this.getBrowserFromUA(ua);
-      let os = this.getOS(ua);
-      GM_xmlhttpRequest({
-        method: "POST",
-        url: "https://telemetry.thebluecorner.net/heartbeat",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        data: JSON.stringify({
-          uuid: userSettings2.uuid,
-          version: version2,
-          browser,
-          os
-        }),
-        onload: (response) => {
-          if (response.status !== 200) {
-            consoleError("Failed to send heartbeat:", response.statusText);
-          }
-        },
-        onerror: (error) => {
-          consoleError("Error sending heartbeat:", error);
-        }
-      });
-    }
     async getBrowserFromUA(ua = navigator.userAgent) {
       ua = ua || "";
       if (ua.includes("OPR/") || ua.includes("Opera")) return "Opera";
@@ -3965,7 +3946,7 @@ Did you try clicking the canvas first?`);
   };
 
   // src/WindowStats.js
-  var _WindowStats_instances, today_fn, loadStats_fn, saveStats_fn, scheduleMidnightReset_fn, renderChart_fn, renderCounters_fn;
+  var _WindowStats_instances, today_fn2, loadStats_fn, saveStats_fn, scheduleMidnightReset_fn, renderChart_fn, renderCounters_fn;
   var WindowStats = class extends Overlay {
     /** Constructor for the stats window
      * @param {*} executor - The executing class (WindowMain)
@@ -3989,7 +3970,7 @@ Did you try clicking the canvas first?`);
       const hour = (/* @__PURE__ */ new Date()).getHours();
       this.stats.hourly[hour] += count;
       this.stats.sessionCount += count;
-      this.stats.date = __privateMethod(this, _WindowStats_instances, today_fn).call(this);
+      this.stats.date = __privateMethod(this, _WindowStats_instances, today_fn2).call(this);
       await __privateMethod(this, _WindowStats_instances, saveStats_fn).call(this);
       __privateMethod(this, _WindowStats_instances, renderChart_fn).call(this);
       __privateMethod(this, _WindowStats_instances, renderCounters_fn).call(this);
@@ -4029,7 +4010,7 @@ Did you try clicking the canvas first?`);
       }).buildElement().addDiv({ "class": "bm-container bm-flex-between", "style": "margin-bottom: 0;" }).addSmall({ "textContent": "Resets daily at midnight" }).buildElement().addButton({ "textContent": "Reset", "style": "font-size: x-small;" }, (instance, button) => {
         button.onclick = async () => {
           if (!confirm("Reset all pixel statistics?")) return;
-          this.stats = { date: __privateMethod(this, _WindowStats_instances, today_fn).call(this), hourly: new Array(24).fill(0), sessionCount: 0 };
+          this.stats = { date: __privateMethod(this, _WindowStats_instances, today_fn2).call(this), hourly: new Array(24).fill(0), sessionCount: 0 };
           await __privateMethod(this, _WindowStats_instances, saveStats_fn).call(this);
           __privateMethod(this, _WindowStats_instances, renderChart_fn).call(this);
           __privateMethod(this, _WindowStats_instances, renderCounters_fn).call(this);
@@ -4044,7 +4025,7 @@ Did you try clicking the canvas first?`);
   _WindowStats_instances = new WeakSet();
   // ─── Private helpers ─────────────────────────────────────────────────────────
   /** Returns today's date as "YYYY-MM-DD" */
-  today_fn = function() {
+  today_fn2 = function() {
     const d = /* @__PURE__ */ new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
@@ -4056,24 +4037,25 @@ Did you try clicking the canvas first?`);
     } catch {
       data = null;
     }
-    const today = __privateMethod(this, _WindowStats_instances, today_fn).call(this);
+    const today = __privateMethod(this, _WindowStats_instances, today_fn2).call(this);
     if (!data || data.date !== today) {
       return { date: today, hourly: new Array(24).fill(0), sessionCount: 0 };
     }
     if (!Array.isArray(data.hourly) || data.hourly.length !== 24) {
       data.hourly = new Array(24).fill(0);
     }
-    data.sessionCount = data.sessionCount ?? 0;
+    data.sessionCount = 0;
     return data;
   };
   saveStats_fn = async function() {
-    await GM.setValue(this.storageKey, JSON.stringify(this.stats));
+    const { sessionCount: _drop, ...toSave } = this.stats;
+    await GM.setValue(this.storageKey, JSON.stringify(toSave));
   };
   scheduleMidnightReset_fn = async function() {
     const now = /* @__PURE__ */ new Date();
     const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
     setTimeout(async () => {
-      this.stats = { date: __privateMethod(this, _WindowStats_instances, today_fn).call(this), hourly: new Array(24).fill(0), sessionCount: 0 };
+      this.stats = { date: __privateMethod(this, _WindowStats_instances, today_fn2).call(this), hourly: new Array(24).fill(0), sessionCount: 0 };
       await __privateMethod(this, _WindowStats_instances, saveStats_fn).call(this);
       __privateMethod(this, _WindowStats_instances, renderChart_fn).call(this);
       __privateMethod(this, _WindowStats_instances, renderCounters_fn).call(this);
@@ -4171,70 +4153,6 @@ Did you try clicking the canvas first?`);
     if (elPeak) elPeak.textContent = peakVal > 0 ? `Peak:    ${peakVal.toLocaleString()} px @ ${String(peakHour).padStart(2, "0")}:00` : "Peak:    \u2014";
   };
 
-  // src/WindowTelemetry.js
-  var _WindowTelemetry_instances, setTelemetryValue_fn;
-  var WindowTelemetry = class extends Overlay {
-    /** Constructor for the telemetry window
-     * @param {string} name - The name of the userscript
-     * @param {string} version - The version of the userscript
-     * @param {number} currentTelemetryVersion - The current "version" of the data collection agreement
-     * @param {string} uuid - The UUID of the user
-     * @since 0.88.339
-     * @see {@link Overlay#constructor}
-     */
-    constructor(name2, version2, currentTelemetryVersion2, uuid) {
-      super(name2, version2);
-      __privateAdd(this, _WindowTelemetry_instances);
-      this.window = null;
-      this.windowID = "bm-window-telemetry";
-      this.windowParent = document.body;
-      this.currentTelemetryVersion = currentTelemetryVersion2;
-      this.uuid = uuid;
-    }
-    /** Spawns a telemetry window.
-     * If another telemetry window already exists, we DON'T spawn another!
-     * Parent/child relationships in the DOM structure below are indicated by indentation.
-     * @since 0.88.339
-     */
-    async buildWindow() {
-      if (document.querySelector(`#${this.windowID}`)) {
-        this.handleDisplayError("Telemetry window already exists!");
-        return;
-      }
-      const browser = await this.apiManager.getBrowserFromUA(navigator.userAgent);
-      const os = this.apiManager.getOS(navigator.userAgent);
-      this.window = this.addDiv({ "id": this.windowID, "class": "bm-window", "style": "height: 80vh; z-index: 9998;" }).addDiv({ "class": "bm-window-content" }).addDiv({ "class": "bm-container bm-center-vertically" }).addHeader(1, { "textContent": `${this.name} Telemetry` }).buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container bm-flex-center", "style": "gap: 1.5ch; flex-wrap: wrap;" }).addButton({ "textContent": "Enable Telemetry" }, (instance, button) => {
-        button.onclick = () => {
-          __privateMethod(this, _WindowTelemetry_instances, setTelemetryValue_fn).call(this, this.currentTelemetryVersion);
-          const element = document.getElementById(this.windowID);
-          element?.remove();
-        };
-      }).buildElement().addButton({ "textContent": "Disable Telemetry" }, (instance, button) => {
-        button.onclick = () => {
-          __privateMethod(this, _WindowTelemetry_instances, setTelemetryValue_fn).call(this, 0);
-          const element = document.getElementById(this.windowID);
-          element?.remove();
-        };
-      }).buildElement().addButton({ "textContent": "More Information" }, (instance, button) => {
-        button.onclick = () => {
-          window.open("https://github.com/SwingTheVine/Wplace-TelemetryServer#telemetry-data", "_blank", "noopener noreferrer");
-        };
-      }).buildElement().buildElement().addDiv({ "class": "bm-container bm-scrollable" }).addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Legal" }).buildElement().addP({ "textContent": `We collect anonymous telemetry data such as your browser, OS, and script version to make the experience better for everyone. The data is never shared personally. The data is never sold. You can turn this off by pressing the "Disable" button, but keeping it on helps us improve features and reliability faster. Thank you for supporting ${this.name}!` }).buildElement().buildElement().addHr().buildElement().addDiv({ "class": "bm-container" }).addHeader(2, { "textContent": "Non-Legal Summary" }).buildElement().addP({ "innerHTML": `You can disable telemetry by pressing the "Disable" button. If you would like to read more about what information we collect, press the "More Information" button.<br>This is the data <em>stored</em> on our servers:` }).buildElement().addUl().addLi({ "innerHTML": `A unique identifier (UUIDv4) generated by Blue Marble. This enables our telemetry to function without tracking your actual user ID.<br>Your UUID is: <b>${escapeHTML(this.uuid)}</b>` }).buildElement().addLi({ "innerHTML": `The version of Blue Marble you are using.<br>Your version is: <b>${escapeHTML(this.version)}</b>` }).buildElement().addLi({ "innerHTML": `Your browser type, which is used to determine Blue Marble outages and browser popularity.<br>Your browser type is: <b>${escapeHTML(browser)}</b>` }).buildElement().addLi({ "innerHTML": `Your OS type, which is used to determine Blue Marble outages and OS popularity.<br>Your OS type is: <b>${escapeHTML(os)}</b>` }).buildElement().addLi({ "innerHTML": `The date and time that Blue Marble sent the telemetry information.` }).buildElement().buildElement().addP({ "innerHTML": `All of the data mentioned above is <b>aggregated every hour</b>. This means every hour, anything that could even remotly be considered "personal data" is deleted from our server. Here, "aggregated" data means things like "42 people used Blue Marble on Google Chrome this hour", which can't be used to identify anyone in particular.` }).buildElement().buildElement().buildElement().buildElement().buildElement().buildOverlay(this.windowParent);
-    }
-  };
-  _WindowTelemetry_instances = new WeakSet();
-  /** Enables or disables telemetry based on the value passed in.
-   * A value of zero will always disable telemetry.
-   * A numeric, non-zero value will enable telemetry until the telemetry agreement is changed.
-   * @param {number} value - The value to set the telemetry to
-   * @since 0.88.339
-   */
-  setTelemetryValue_fn = function(value) {
-    const userSettings2 = JSON.parse(GM_getValue("bmUserSettings", "{}"));
-    userSettings2.telemetry = value;
-    GM.setValue("bmUserSettings", JSON.stringify(userSettings2));
-  };
-
   // src/main.js
   var name = GM_info.script.name.toString();
   var version = GM_info.script.version.toString();
@@ -4307,8 +4225,8 @@ Did you try clicking the canvas first?`);
         });
     }
 
-    // JSON \u2192 forward to userscript via postMessage
-    if (contentType.includes('application/json')) {
+    // JSON \u2192 forward to userscript via postMessage (skip Supabase \u2014 handled directly)
+    if (contentType.includes('application/json') && !endpointName.includes('supabase.co')) {
       console.log('%c' + name + '%c: JSON endpoint "' + endpointName + '"', consoleStyle, '');
       cloned.json()
         .then(jsonData => {
@@ -4381,12 +4299,9 @@ Did you try clicking the canvas first?`);
   var windowStats = new WindowStats(windowMain);
   var templateManager = new TemplateManager(name, version);
   var apiManager = new ApiManager(templateManager);
-  var settingsManager = new SettingsManager(name, version, userSettings);
-  windowMain.setSettingsManager(settingsManager);
   windowMain.setApiManager(apiManager);
   windowMain.windowStats = windowStats;
   templateManager.setWindowMain(windowMain);
-  templateManager.setSettingsManager(settingsManager);
   window.addEventListener("message", (event) => {
     if (event.data?.source === "blue-marble-pixel-placed") {
       windowStats.recordPixel(event.data.count ?? 1);
@@ -4417,15 +4332,6 @@ Did you try clicking the canvas first?`);
     const uuid = crypto.randomUUID();
     console.log(uuid);
     GM.setValue("bmUserSettings", JSON.stringify({ "uuid": uuid }));
-  }
-  setInterval(() => apiManager.sendHeartbeat(version), 1e3 * 60 * 30);
-  var currentTelemetryVersion = 1;
-  var previousTelemetryVersion = userSettings?.telemetry;
-  console.log(`Telemetry is ${!(previousTelemetryVersion == void 0)}`);
-  if (previousTelemetryVersion == void 0 || previousTelemetryVersion > currentTelemetryVersion) {
-    const windowTelemetry = new WindowTelemetry(name, version, currentTelemetryVersion, userSettings?.uuid);
-    windowTelemetry.setApiManager(apiManager);
-    windowTelemetry.buildWindow();
   }
   windowMain.buildWindow();
   apiManager.spontaneousResponseListener(windowMain);
