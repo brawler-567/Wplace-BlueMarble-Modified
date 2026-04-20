@@ -46,7 +46,7 @@
 
 <h1>Blue Marble</h1>
 <a href="https://github.com/brawler-567/Wplace-BlueMarble-Modified/releases" target="_blank" rel="noopener noreferrer"><img alt="Latest Version" src="https://img.shields.io/badge/Latest_Version-0.92.3-lightblue?style=flat"></a>
-<a href="https://github.com/brawler-567/Wplace-BlueMarble-Modified/releases/tag/0.92.2" target="_blank" rel="noopener noreferrer"><img alt="Latest Release" src="https://img.shields.io/github/v/release/brawler-567/Wplace-BlueMarble-Modified?sort=semver&style=flat&label=Latest%20Release&color=blue"></a>
+<a href="https://github.com/brawler-567/Wplace-BlueMarble-Modified/releases/tag/0.92.3" target="_blank" rel="noopener noreferrer"><img alt="Latest Release" src="https://img.shields.io/github/v/release/brawler-567/Wplace-BlueMarble-Modified?sort=semver&style=flat&label=Latest%20Release&color=blue"></a>
 <a href="https://github.com/SwingTheVine/Wplace-BlueMarble/blob/main/LICENSE.txt" target="_blank" rel="noopener noreferrer"><img alt="Software License: MPL-2.0" src="https://img.shields.io/badge/Software_License-MPL--2.0-slateblue?style=flat"></a>
 <a href="https://discord.gg/tpeBPy46hf" target="_blank" rel="noopener noreferrer"><img alt="Contact Me" src="https://img.shields.io/badge/Contact_Me-gray?style=flat&logo=Discord&logoColor=white&logoSize=auto&labelColor=cornflowerblue"></a>
 <a href="https://bluemarble.lol/" target="_blank" rel="noopener noreferrer"><img alt="Blue Marble Website" src="https://img.shields.io/badge/Blue_Marble_Website-crqch-blue?style=flat&logo=globe&logoColor=white"></a>
