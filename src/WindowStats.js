@@ -35,6 +35,20 @@ export default class WindowStats extends Overlay {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   }
 
+  /** Returns this week as "YYYY-WNN" */
+  #thisWeek() {
+    const d = new Date();
+    const jan4 = new Date(d.getFullYear(), 0, 4);
+    const week = Math.ceil(((d - jan4) / 86400000 + jan4.getDay() + 1) / 7);
+    return `${d.getFullYear()}-W${String(week).padStart(2,'0')}`;
+  }
+
+  /** Returns this month as "YYYY-MM" */
+  #thisMonth() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  }
+
   /** Loads stats from GM storage; resets hourly array if the stored date differs from today. */
   #loadStats() {
     let data;
@@ -45,10 +59,34 @@ export default class WindowStats extends Overlay {
     }
 
     const today = this.#today();
+    const thisWeek = this.#thisWeek();
+    const thisMonth = this.#thisMonth();
 
     if (!data || data.date !== today) {
-      // New day → fresh hourly array, keep nothing from yesterday
-      return { date: today, hourly: new Array(24).fill(0), sessionCount: 0 };
+      // New day → fresh hourly array
+      const newData = {
+        date: today,
+        hourly: new Array(24).fill(0),
+        sessionCount: 0,
+        weekPeriod: thisWeek,
+        weekTotal: 0,
+        monthPeriod: thisMonth,
+        monthTotal: 0
+      };
+
+      // If we have old data, check if we're still in the same week/month
+      if (data) {
+        if (data.weekPeriod === thisWeek) {
+          // Same week - keep week total
+          newData.weekTotal = data.weekTotal || 0;
+        }
+        if (data.monthPeriod === thisMonth) {
+          // Same month - keep month total
+          newData.monthTotal = data.monthTotal || 0;
+        }
+      }
+
+      return newData;
     }
 
     // Ensure arrays are the right length (safety)
@@ -57,6 +95,21 @@ export default class WindowStats extends Overlay {
     }
 
     data.sessionCount = data.sessionCount ?? 0;
+    data.weekPeriod = data.weekPeriod ?? thisWeek;
+    data.weekTotal = data.weekTotal ?? 0;
+    data.monthPeriod = data.monthPeriod ?? thisMonth;
+    data.monthTotal = data.monthTotal ?? 0;
+
+    // Check if week or month changed
+    if (data.weekPeriod !== thisWeek) {
+      data.weekPeriod = thisWeek;
+      data.weekTotal = 0;
+    }
+    if (data.monthPeriod !== thisMonth) {
+      data.monthPeriod = thisMonth;
+      data.monthTotal = 0;
+    }
+
     return data;
   }
 
@@ -70,7 +123,23 @@ export default class WindowStats extends Overlay {
     const now = new Date();
     const msToMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime();
     setTimeout(async () => {
-      this.stats = { date: this.#today(), hourly: new Array(24).fill(0), sessionCount: 0 };
+      const today = this.#today();
+      const thisWeek = this.#thisWeek();
+      const thisMonth = this.#thisMonth();
+
+      // Keep week/month totals if still in same period
+      const newWeekTotal = (this.stats.weekPeriod === thisWeek) ? this.stats.weekTotal : 0;
+      const newMonthTotal = (this.stats.monthPeriod === thisMonth) ? this.stats.monthTotal : 0;
+
+      this.stats = {
+        date: today,
+        hourly: new Array(24).fill(0),
+        sessionCount: 0,
+        weekPeriod: thisWeek,
+        weekTotal: newWeekTotal,
+        monthPeriod: thisMonth,
+        monthTotal: newMonthTotal
+      };
       await this.#saveStats();
       this.#renderChart();
       this.#renderCounters();
@@ -209,7 +278,11 @@ export default class WindowStats extends Overlay {
     const hour = new Date().getHours();
     this.stats.hourly[hour] += count;
     this.stats.sessionCount += count;
+    this.stats.weekTotal += count;
+    this.stats.monthTotal += count;
     this.stats.date = this.#today();
+    this.stats.weekPeriod = this.#thisWeek();
+    this.stats.monthPeriod = this.#thisMonth();
     await this.#saveStats();
     this.#renderChart();
     this.#renderCounters();
@@ -278,7 +351,15 @@ export default class WindowStats extends Overlay {
           .addButton({'textContent': 'Reset', 'style': 'font-size: x-small;'}, (instance, button) => {
             button.onclick = async () => {
               if (!confirm('Reset all pixel statistics?')) return;
-              this.stats = { date: this.#today(), hourly: new Array(24).fill(0), sessionCount: 0 };
+              this.stats = {
+                date: this.#today(),
+                hourly: new Array(24).fill(0),
+                sessionCount: 0,
+                weekPeriod: this.#thisWeek(),
+                weekTotal: 0,
+                monthPeriod: this.#thisMonth(),
+                monthTotal: 0
+              };
               await this.#saveStats();
               this.#renderChart();
               this.#renderCounters();

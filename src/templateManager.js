@@ -13,6 +13,7 @@ import {
 } from "./utils";
 import WindowMain from "./WindowMain";
 import WindowWizard from "./WindowWizard";
+import { notifyCanvasChange } from "./tileManager";
 
 export default class TemplateManager {
   constructor(name, version) {
@@ -72,6 +73,7 @@ export default class TemplateManager {
   toggleXMode() {
     this.xModeEnabled = !this.xModeEnabled;
     if (this.xModeEnabled) this.xBgIndex = 0;
+    notifyCanvasChange(); // Clear cache when toggling X-Mode
     return this.xModeEnabled;
   }
 
@@ -176,6 +178,7 @@ export default class TemplateManager {
 
     this.windowMain.handleDisplayStatus(`Template created at ${coords.join(", ")}!`);
     await this.#storeTemplates();
+    notifyCanvasChange(); // Clear cache when new template is created
   }
 
   async #storeTemplates() {
@@ -349,11 +352,7 @@ export default class TemplateManager {
     outCtx.setTransform(1, 0, 0, 1, 0, 0);
     outCtx.clearRect(0, 0, drawSize, drawSize);
 
-    if (this.xModeEnabled) {
-      const bg = this._getXBackground();
-      outCtx.fillStyle = bg.css;
-      outCtx.fillRect(0, 0, drawSize, drawSize);
-    } else {
+    if (!this.xModeEnabled) {
       outCtx.drawImage(tileBitmap, 0, 0, drawSize, drawSize);
     }
 
@@ -382,6 +381,13 @@ export default class TemplateManager {
 
       const w = bitmap.width;
       const h = bitmap.height;
+
+      // Draw background for this template in X-Mode
+      if (this.xModeEnabled) {
+        const bg = this._getXBackground();
+        outCtx.fillStyle = bg.css;
+        outCtx.fillRect(xDraw, yDraw, w, h);
+      }
 
       const tileRegion = analysisCtx.getImageData(xDraw, yDraw, w, h);
       const tileRegion32 = new Uint32Array(tileRegion.data.buffer);
@@ -541,6 +547,7 @@ export default class TemplateManager {
 
       this.templatesArray = await loadSchema({ tileSize: this.tileSize, drawMult: this.drawMult, templatesArray: [] });
       this._tileIndexDirty = true;
+      notifyCanvasChange(); // Clear cache when new template is loaded
     } else if (schemaVersionArray[0] < schemaVersionBleedingEdge[0]) {
       const windowWizard = new WindowWizard(this.name, this.version, this.schemaVersion, this);
       windowWizard.buildWindow();
@@ -667,5 +674,134 @@ export default class TemplateManager {
     }
 
     return { correctPixels: _colorpalette, filteredTemplate: template32 };
+  }
+
+  /** Get all incorrect pixels in visible viewport
+   * @returns {Promise<Array<{x: number, y: number, tileX: number, tileY: number, pixelX: number, pixelY: number, colorId: number}>>} Array of incorrect pixels
+   * @since 0.88.1
+   */
+  async getIncorrectPixelsInViewport() {
+    if (!this.templatesArray || this.templatesArray.length === 0) {
+      consoleWarn('No templates loaded');
+      return [];
+    }
+
+    if (this._tileIndexDirty) this._rebuildTileIndex();
+
+    const incorrectPixels = [];
+    const lookupTable = this.paletteBM.LUT;
+    const tolerance = this.paletteTolerance;
+    const pixelSize = this.drawMult;
+
+    let tilesChecked = 0;
+    let tilesSkipped = 0;
+    let tilesWithTemplates = 0;
+
+    consoleLog(`Checking ${this._tileIndex.size} tiles with templates...`);
+
+    // Check all tiles that have templates
+    for (const [tileCoordsKey, refs] of this._tileIndex.entries()) {
+      if (!refs || refs.length === 0) continue;
+
+      tilesWithTemplates++;
+      const parts = tileCoordsKey.split(',');
+      const tileX = Number(parts[0]);
+      const tileY = Number(parts[1]);
+
+      // Try to get tile data from the server
+      let tileBlob;
+      try {
+        const tileUrl = `https://backend.wplace.live/files/s0/tiles/${tileX}/${tileY}.png`;
+        const response = await fetch(tileUrl);
+        if (!response.ok) {
+          // Silently skip tiles that don't exist (404)
+          tilesSkipped++;
+          continue;
+        }
+        tileBlob = await response.blob();
+        tilesChecked++;
+      } catch (error) {
+        // Silently skip tiles that fail to load
+        tilesSkipped++;
+        continue;
+      }
+
+      // Create bitmap from tile
+      const tileBitmap = await createImageBitmap(tileBlob);
+      const drawSize = this.tileSize * this.drawMult;
+
+      // Create canvas to analyze tile
+      const canvas = new OffscreenCanvas(drawSize, drawSize);
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(tileBitmap, 0, 0, drawSize, drawSize);
+
+      // Process each template reference for this tile
+      for (const ref of refs) {
+        const templateInst = ref.template;
+        const tileKeyFull = ref.tileKey;
+        const chunk32 = templateInst.chunked32?.[tileKeyFull];
+
+        if (!chunk32) continue;
+
+        const keyParts = tileKeyFull.split(',');
+        const px = Number(keyParts[2]);
+        const py = Number(keyParts[3]);
+
+        const bitmap = templateInst.chunked?.[tileKeyFull];
+        if (!bitmap) continue;
+
+        const w = bitmap.width;
+        const h = bitmap.height;
+
+        // Get tile region
+        const tileRegion = ctx.getImageData(px * pixelSize, py * pixelSize, w, h);
+        const tileRegion32 = new Uint32Array(tileRegion.data.buffer);
+
+        // Compare template with tile
+        for (let templateRow = 1; templateRow < h; templateRow += pixelSize) {
+          const tileRow = templateRow - 1;
+          const tRowOff = templateRow * w;
+          const bRowOff = tileRow * w;
+
+          for (let templateCol = 1; templateCol < w; templateCol += pixelSize) {
+            const templatePixel = chunk32[tRowOff + templateCol];
+            const tilePixelAbove = tileRegion32[bRowOff + templateCol];
+
+            const ta = (templatePixel >>> 24) & 0xff;
+            const ba = (tilePixelAbove >>> 24) & 0xff;
+
+            if (ta <= tolerance) continue;
+
+            const tid = lookupTable.get(templatePixel) ?? -2;
+            const bid = lookupTable.get(tilePixelAbove) ?? -2;
+
+            // If colors don't match, this is an incorrect pixel
+            if (tid !== bid && tid >= 0 && tid !== -2) {
+              const pixelX = Math.floor(templateCol / pixelSize);
+              const pixelY = Math.floor(templateRow / pixelSize);
+
+              incorrectPixels.push({
+                x: tileX * this.tileSize + px + pixelX,
+                y: tileY * this.tileSize + py + pixelY,
+                tileX: tileX,
+                tileY: tileY,
+                pixelX: px + pixelX,
+                pixelY: py + pixelY,
+                colorId: tid
+              });
+            }
+          }
+        }
+      }
+    }
+
+    consoleLog('Template check complete: ' + tilesWithTemplates + ' tiles with templates, checked ' + tilesChecked + ' tiles, skipped ' + tilesSkipped + ' tiles (404). Found ' + incorrectPixels.length + ' incorrect pixels.');
+
+    if (tilesChecked === 0 && tilesWithTemplates > 0) {
+      consoleWarn('All tiles with templates returned 404. The template may be in an area that does not exist on the server yet.');
+    }
+
+    return incorrectPixels;
   }
 }

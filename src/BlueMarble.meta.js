@@ -2,7 +2,7 @@
 // @name            Blue Marble Modified
 // @name:en         Blue Marble Modified
 // @namespace       https://github.com/SwingTheVine/
-// @version         0.92.2
+// @version         0.92.4
 // @description     A userscript to enhance the user experience on Wplace.live. This includes, but is not limited to: uploading images to display locally on a canvas, adding a button to move the Wplace color palette menu, and other QoL features.
 // @description:en  A userscript to enhance the user experience on Wplace.live. This includes, but is not limited to: uploading images to display locally on a canvas, adding a button to move the Wplace color palette menu, and other QoL features.
 // @author          SwingTheVine
@@ -10,9 +10,8 @@
 // @supportURL      https://discord.gg/tpeBPy46hf
 // @homepageURL     https://bluemarble.lol/
 // @icon            https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/2cd51bf91944ae2acb253ea5bbd76f79b7a2edd3/dist/assets/Favicon.png
-// @updateURL       https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/BlueMarble.user.js
-// @downloadURL     https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/main/dist/BlueMarble.user.js
-// @match           https://wplace.live/*
+// @updateURL       https://raw.githubusercontent.com/brawler-567/Wplace-BlueMarble-Modified/main/dist/BlueMarble.user.js
+// @downloadURL     https://raw.githubusercontent.com/brawler-567/Wplace-BlueMarble-Modified/main/dist/BlueMarble.user.js
 // @grant           GM_getResourceText
 // @grant           GM_addStyle
 // @grant           GM.setValue
@@ -20,9 +19,8 @@
 // @grant           GM_deleteValue
 // @grant           GM_xmlhttpRequest
 // @grant           GM.download
-// @connect         telemetry.thebluecorner.net
-// @resource        CSS-BM-File https://raw.githubusercontent.com/SwingTheVine/Wplace-BlueMarble/2cd51bf91944ae2acb253ea5bbd76f79b7a2edd3/dist/BlueMarble.user.css
-// @antifeature     tracking Anonymous opt-in telemetry data
+// @resource        CSS-BM-File https://raw.githubusercontent.com/brawler-567/Wplace-BlueMarble-Modified/main/dist/BlueMarble.user.css
+// @match           https://wplace.live/*
 // @noframes
 // ==/UserScript==
 

@@ -179,7 +179,7 @@ export default class WindowWizard extends Overlay {
     const templates = this.currentJSON?.templates; // Templates in user storage
 
     // If there is at least one template loaded...
-    if (Object.keys(templates).length > 0) {
+    if (templates && Object.keys(templates).length > 0) {
 
       // Obtains the parent element for the template list
       const templateListParentElement = document.querySelector(`#${this.windowID} .bm-scrollable`);
@@ -268,7 +268,7 @@ export default class WindowWizard extends Overlay {
     const templates = this.currentJSON?.templates;
 
     // If there is at least one template loaded...
-    if (Object.keys(templates).length > 0) {
+    if (templates && Object.keys(templates).length > 0) {
 
       // For each template loaded...
       for (const [key, template] of Object.entries(templates)) {

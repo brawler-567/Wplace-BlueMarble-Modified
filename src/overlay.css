@@ -358,3 +358,167 @@ input[type="file"] {
 .bm-windowed h1:not(#bm-window-main h1) {
   font-size: 1em;
 }
+
+/* ─── Modern UI Enhancements ─────────────────────────────────────────────── */
+/* @since 0.91.0 */
+
+/* Enhanced window styling with backdrop blur */
+.bm-window {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Smooth transitions for all interactive elements */
+.bm-window button,
+.bm-window input,
+.bm-window select,
+.bm-window textarea {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced button hover effects */
+.bm-window button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.bm-window button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Gradient dragbar for modern look */
+.bm-dragbar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 12px 16px;
+  border-radius: 8px 8px 0 0;
+  margin: -10px -10px 10px -10px;
+}
+
+/* Enhanced input fields */
+.bm-window input[type="text"],
+.bm-window input[type="number"],
+.bm-window textarea,
+.bm-window select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.bm-window input[type="text"]:focus,
+.bm-window input[type="number"]:focus,
+.bm-window textarea:focus,
+.bm-window select:focus {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(102, 126, 234, 0.6);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+/* Enhanced button styling */
+.bm-window button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.bm-window button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Circle buttons with modern styling */
+.bm-button-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.bm-button-circle:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Enhanced scrollbar */
+.bm-scrollable::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bm-scrollable::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.bm-scrollable::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.6);
+  border-radius: 4px;
+}
+
+.bm-scrollable::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.8);
+}
+
+/* Smooth animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.bm-window {
+  animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced container spacing */
+.bm-container {
+  margin: 12px 0;
+}
+
+/* Modern hr styling */
+.bm-window hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  margin: 16px 0;
+}
+
+/* SVG icon styling */
+.bm-window svg {
+  vertical-align: middle;
+  display: inline-block;
+}
+
+/* Enhanced leaderboard styling */
+#bm-window-leaderboard {
+  backdrop-filter: blur(15px);
+  background: rgba(21, 48, 99, 0.95);
+}
+
+#bm-window-leaderboard .bm-lb-list > div {
+  transition: all 0.2s ease;
+}
+
+#bm-window-leaderboard .bm-lb-list > div:hover {
+  background: rgba(100, 180, 255, 0.1) !important;
+  transform: translateX(2px);
+}

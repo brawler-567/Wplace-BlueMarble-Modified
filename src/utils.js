@@ -1,3 +1,80 @@
+/** @file Utility functions for Blue Marble
+ * @since 0.0.0
+ */
+
+// ─── Debug Logging System ─────────────────────────────────────────────────────
+
+/** Gets the debug logging enabled setting from storage
+ * @returns {boolean} Whether debug logging is enabled
+ * @since 0.91.0
+ */
+export function getDebugLoggingEnabled() {
+  try {
+    let debugEnabled = null;
+
+    if (typeof GM_getValue !== 'undefined') {
+      const saved = GM_getValue('bmDebugLogging', null);
+      if (saved !== null) debugEnabled = JSON.parse(saved);
+    }
+
+    if (debugEnabled === null) {
+      const saved = localStorage.getItem('bmDebugLogging');
+      if (saved !== null) debugEnabled = JSON.parse(saved);
+    }
+
+    if (debugEnabled !== null) return debugEnabled;
+  } catch (error) {
+    console.warn('Failed to load debug logging setting:', error);
+  }
+
+  return false;
+}
+
+/** Saves the debug logging enabled setting to storage
+ * @param {boolean} enabled - Whether debug logging should be enabled
+ * @since 0.91.0
+ */
+export function saveDebugLoggingEnabled(enabled) {
+  try {
+    const enabledString = JSON.stringify(enabled);
+
+    if (typeof GM_setValue !== 'undefined') {
+      GM_setValue('bmDebugLogging', enabledString);
+    }
+
+    localStorage.setItem('bmDebugLogging', enabledString);
+  } catch (error) {
+    console.error('Failed to save debug logging setting:', error);
+  }
+}
+
+/** Debug logging function that only logs when debug mode is enabled
+ * @param {...any} args - Arguments to be passed to console.log
+ * @since 0.91.0
+ */
+export function debugLog(...args) {
+  if (getDebugLoggingEnabled()) {
+    console.log('%c[BM Debug]%c', 'color: #667eea; font-weight: bold;', '', ...args);
+  }
+}
+
+/** Converts canvas position to latitude/longitude coordinates
+ * @param {number} x - X coordinate on canvas
+ * @param {number} y - Y coordinate on canvas
+ * @returns {Array<number, number>} [latitude, longitude]
+ * @since 0.91.0
+ */
+export function canvasPosToLatLng(x, y) {
+  const tileSize = 256;
+  const worldSize = 4096 * tileSize;
+
+  const lng = (x / worldSize) * 360 - 180;
+  const lat = 90 - (y / worldSize) * 180;
+
+  return [lat, lng];
+}
+
+// ─── Original Utils ───────────────────────────────────────────────────────────
 
 /** Returns a Date of when Wplace was last updated.
  * This is obtained from a certain DOM element which contains the version of Wplace.

@@ -29,6 +29,7 @@ export default class WindowMain extends Overlay {
 
     // Track sub-window instances for toggling
     this._bookmarksInstance = null;
+    this.windowFilter = null; // Store reference to WindowFilter instance
   }
 
   /** Creates the main Blue Marble window.
@@ -162,15 +163,126 @@ export default class WindowMain extends Overlay {
               button.onclick = () => this.#buildWindowFilter();
             }).buildElement()
           .buildElement()
+          .addDiv({'class': 'bm-container bm-flex-between', 'style': 'gap: 0.5em;'})
+            .addButton({'id': 'bm-quick-paint-toggle', 'textContent': 'Quick Paint', 'data-button-status': 'idle'}, (instance, button) => {
+              let paintQueue = [];
+              let isActive = false;
+
+              button.onclick = async () => {
+                if (isActive) {
+                  // Stop Quick Paint
+                  isActive = false;
+                  paintQueue = [];
+                  button.textContent = 'Quick Paint';
+                  button.style.background = '';
+                  instance.handleDisplayStatus('Quick Paint stopped.');
+                  return;
+                }
+
+                // Start Quick Paint
+                isActive = true;
+                button.textContent = 'Painting...';
+                button.style.background = 'linear-gradient(135deg, #ffc107, #ff8c00)';
+
+                try {
+                  const templateManager = instance.apiManager?.templateManager;
+                  if (!templateManager) {
+                    instance.handleDisplayError('Template manager not available!');
+                    isActive = false;
+                    button.textContent = 'Quick Paint';
+                    button.style.background = '';
+                    return;
+                  }
+
+                  // Get initial charges count
+                  let currentCharges = Math.floor(instance.apiManager?.userPaintData?.charges || 0);
+
+                  console.log('Current charges:', currentCharges, 'Raw:', instance.apiManager?.userPaintData?.charges);
+
+                  if (currentCharges <= 1) {
+                    instance.handleDisplayStatus('Not enough charges! Need at least 2 charges to use Quick Paint.');
+                    isActive = false;
+                    button.textContent = 'Quick Paint';
+                    button.style.background = '';
+                    return;
+                  }
+
+                  instance.handleDisplayStatus('Analyzing templates and getting incorrect pixels...');
+                  const incorrectPixels = await templateManager.getIncorrectPixelsInViewport();
+
+                  if (incorrectPixels.length === 0) {
+                    instance.handleDisplayStatus('No incorrect pixels found! All pixels match the template.');
+                    isActive = false;
+                    button.textContent = 'Quick Paint';
+                    button.style.background = '';
+                    return;
+                  }
+
+                  let unlockedColors = instance.apiManager?.unlockedColors || [];
+                  if (!unlockedColors || unlockedColors.length === 0) {
+                    console.warn('No unlocked colors found, using basic palette (0-31)');
+                    unlockedColors = Array.from({length: 32}, (_, i) => i);
+                  }
+
+                  paintQueue = incorrectPixels.filter(pixel =>
+                    unlockedColors.includes(pixel.colorId)
+                  );
+
+                  const skippedCount = incorrectPixels.length - paintQueue.length;
+
+                  if (paintQueue.length === 0) {
+                    instance.handleDisplayStatus(`Found ${incorrectPixels.length} incorrect pixels, but none use colors you have unlocked.`);
+                    isActive = false;
+                    button.textContent = 'Quick Paint';
+                    button.style.background = '';
+                    return;
+                  }
+
+                  // Limit to available charges minus 1
+                  const maxPixels = currentCharges - 1;
+                  const pixelsToSelect = paintQueue.slice(0, maxPixels);
+
+                  instance.handleDisplayStatus(
+                    `Found ${incorrectPixels.length} incorrect pixels. ` +
+                    `${paintQueue.length} paintable, ${skippedCount} skipped (locked colors). ` +
+                    `Selecting ${pixelsToSelect.length} pixels locally...`
+                  );
+
+                  // Store pixels for batch painting
+                  instance.quickPaintQueue = pixelsToSelect;
+
+                  console.log(`Prepared ${pixelsToSelect.length} pixels for painting`);
+
+                  const selected = pixelsToSelect.length;
+
+                  isActive = false;
+                  button.textContent = 'Quick Paint';
+                  button.style.background = '';
+
+                  instance.handleDisplayStatus(
+                    `Prepared ${selected} pixels for batch painting. ` +
+                    `Now manually click "Paint Pixel" button once to send all to server.`
+                  );
+
+                } catch (error) {
+                  instance.handleDisplayError(`Quick Paint error: ${error.message}`);
+                  console.error('Quick Paint error:', error);
+                  isActive = false;
+                  button.textContent = 'Quick Paint';
+                  button.style.background = '';
+                }
+              };
+            }).buildElement()
+          .buildElement()
           .addDiv({'class': 'bm-container'})
             .addTextarea({'id': this.outputStatusId, 'placeholder': `Status: Sleeping...\nVersion: ${this.version}`, 'readOnly': true}).buildElement()
           .buildElement()
           .addDiv({'class': 'bm-container bm-flex-between', 'style': 'margin-bottom: 0; flex-direction: column;'})
             .addDiv({'class': 'bm-flex-between'})
               // .addButton({'class': 'bm-button-circle', 'innerHTML': '🖌'}).buildElement()
-              .addButton({'class': 'bm-button-circle', 'innerHTML': '⚙️', 'title': 'Settings'}, (instance, button) => {
+              .addButton({'class': 'bm-button-circle', 'innerHTML': '🏆', 'title': 'Leaderboard'}, (instance, button) => {
                 button.onclick = () => {
-                  instance.settingsManager.buildWindow();
+                  instance.windowLeaderboard?.buildWindow();
                 }
               }).buildElement()
 
@@ -257,8 +369,8 @@ export default class WindowMain extends Overlay {
    * @since 0.88.330
    */
   #buildWindowFilter() {
-    const windowFilter = new WindowFilter(this); // Creates a new color filter window instance
-    windowFilter.buildWindow();
+    this.windowFilter = new WindowFilter(this); // Creates a new color filter window instance
+    this.windowFilter.buildWindow();
   }
 
   /** Handles pasting into the coordinate input boxes in the main Blue Marble window.

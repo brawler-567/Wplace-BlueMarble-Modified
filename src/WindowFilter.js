@@ -1,6 +1,7 @@
 import ConfettiManager from "./confetttiManager";
 import Overlay from "./Overlay";
 import { calculateRelativeLuminance, localizeDate, localizeNumber, localizePercent, rgbToHex } from "./utils";
+import { notifyCanvasChange } from "./tileManager";
 
 /** The overlay builder for the color filter Blue Marble window.
  * @description This class handles the overlay UI for the color filter window of the Blue Marble userscript.
@@ -24,6 +25,9 @@ export default class WindowFilter extends Overlay {
 
     /** The templateManager instance currently being used. @type {TemplateManager} */
     this.templateManager = executor.apiManager?.templateManager;
+
+    /** The apiManager instance for checking premium status */
+    this.apiManager = executor.apiManager;
 
     // Eye icons
     this.eyeOpen = '<svg viewBox="0 .5 6 3"><path d="M0,2Q3-1 6,2Q3,5 0,2H2A1,1 0 1 0 3,1Q3,2 2,2"/></svg>';
@@ -53,7 +57,11 @@ export default class WindowFilter extends Overlay {
     this.sortPrimary   = savedFilterSettings?.sortPrimary   ?? 'id';
     this.sortSecondary = savedFilterSettings?.sortSecondary ?? 'ascending';
     this.showUnused    = savedFilterSettings?.showUnused    ?? false;
+    this.hideCompleted = savedFilterSettings?.hideCompleted ?? false;
     this.savedScrollTop = savedFilterSettings?.scrollTop    ?? 0;
+
+    // Auto-refresh interval
+    this.autoRefreshInterval = null;
   }
 
   /** Spawns a Color Filter window.
@@ -104,11 +112,18 @@ export default class WindowFilter extends Overlay {
           .addButton({'textContent': 'Hide All Colors'}, (instance, button) => {
             button.onclick = () => this.#selectColorList(false);
           }).buildElement()
-          .addButton({'textContent': 'Refresh Data'}, (instance, button) => {
+          .addButton({'textContent': this.hideCompleted ? 'Show Completed' : 'Hide Completed', 'id': 'bm-filter-toggle-completed'}, (instance, button) => {
             button.onclick = () => {
-              button.disabled = true;
-              this.updateColorList();
-              button.disabled = false;
+              this.hideCompleted = !this.hideCompleted;
+              button.textContent = this.hideCompleted ? 'Show Completed' : 'Hide Completed';
+              this.#sortColorList(this.sortPrimary, this.sortSecondary, this.showUnused);
+              GM.setValue('bmFilterSettings', JSON.stringify({
+                sortPrimary:   this.sortPrimary,
+                sortSecondary: this.sortSecondary,
+                showUnused:    this.showUnused,
+                hideCompleted: this.hideCompleted,
+                scrollTop:     this.savedScrollTop
+              }));
             };
           }).buildElement()
           .addButton({'textContent': 'Show All Colors'}, (instance, button) => {
@@ -220,6 +235,30 @@ export default class WindowFilter extends Overlay {
     this.updateInnerHTML('#bm-filter-tot-total', `<b>Total Pixels:</b> ${localizeNumber(this.allPixelsTotal)}`);
     this.updateInnerHTML('#bm-filter-tot-remaining', `<b>Remaining:</b> ${localizeNumber((this.allPixelsTotal || 0) - (this.allPixelsCorrectTotal || 0))} (${localizePercent(((this.allPixelsTotal || 0) - (this.allPixelsCorrectTotal || 0)) / (this.allPixelsTotal || 1))})`);
     this.updateInnerHTML('#bm-filter-tot-completed', `<b>Completed at:</b> <time datetime="${this.timeRemaining.toISOString().replace(/\.\d{3}Z$/, 'Z')}">${this.timeRemainingLocalized}</time>`);
+
+    // Start auto-refresh every 5 seconds
+    this.autoRefreshInterval = setInterval(() => {
+      this.updateColorList();
+      this.updateInnerHTML('#bm-filter-tile-load', `<b>Tiles Loaded:</b> ${localizeNumber(this.tilesLoadedTotal)} / ${localizeNumber(this.tilesTotal)}`);
+      this.updateInnerHTML('#bm-filter-tot-correct', `<b>Correct Pixels:</b> ${localizeNumber(this.allPixelsCorrectTotal)}`);
+      this.updateInnerHTML('#bm-filter-tot-total', `<b>Total Pixels:</b> ${localizeNumber(this.allPixelsTotal)}`);
+      this.updateInnerHTML('#bm-filter-tot-remaining', `<b>Remaining:</b> ${localizeNumber((this.allPixelsTotal || 0) - (this.allPixelsCorrectTotal || 0))} (${localizePercent(((this.allPixelsTotal || 0) - (this.allPixelsCorrectTotal || 0)) / (this.allPixelsTotal || 1))})`);
+      this.updateInnerHTML('#bm-filter-tot-completed', `<b>Completed at:</b> <time datetime="${this.timeRemaining.toISOString().replace(/\.\d{3}Z$/, 'Z')}">${this.timeRemainingLocalized}</time>`);
+    }, 5000);
+
+    // Clean up interval when window is closed
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.removedNodes.forEach((node) => {
+          if (node.id === this.windowID && this.autoRefreshInterval) {
+            clearInterval(this.autoRefreshInterval);
+            this.autoRefreshInterval = null;
+            observer.disconnect();
+          }
+        });
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   /** Spawns a windowed Color Filter window.
@@ -275,11 +314,18 @@ export default class WindowFilter extends Overlay {
           .addButton({'textContent': 'None'}, (instance, button) => {
             button.onclick = () => this.#selectColorList(false);
           }).buildElement()
-          .addButton({'textContent': 'Refresh'}, (instance, button) => {
+          .addButton({'textContent': this.hideCompleted ? 'Show ✓' : 'Hide ✓', 'id': 'bm-filter-toggle-completed'}, (instance, button) => {
             button.onclick = () => {
-              button.disabled = true;
-              this.updateColorList();
-              button.disabled = false;
+              this.hideCompleted = !this.hideCompleted;
+              button.textContent = this.hideCompleted ? 'Show ✓' : 'Hide ✓';
+              this.#sortColorList(this.sortPrimary, this.sortSecondary, this.showUnused);
+              GM.setValue('bmFilterSettings', JSON.stringify({
+                sortPrimary:   this.sortPrimary,
+                sortSecondary: this.sortSecondary,
+                showUnused:    this.showUnused,
+                hideCompleted: this.hideCompleted,
+                scrollTop:     this.savedScrollTop
+              }));
             };
           }).buildElement()
           .addButton({'textContent': 'All'}, (instance, button) => {
@@ -325,6 +371,25 @@ export default class WindowFilter extends Overlay {
     if (this.savedScrollTop > 0) {
       scrollableContainer.scrollTop = this.savedScrollTop;
     }
+
+    // Start auto-refresh every 5 seconds
+    this.autoRefreshInterval = setInterval(() => {
+      this.updateColorList();
+    }, 5000);
+
+    // Clean up interval when window is closed
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.removedNodes.forEach((node) => {
+          if (node.id === this.windowID && this.autoRefreshInterval) {
+            clearInterval(this.autoRefreshInterval);
+            this.autoRefreshInterval = null;
+            observer.disconnect();
+          }
+        });
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   /** Creates the color list container.
@@ -380,11 +445,23 @@ export default class WindowFilter extends Overlay {
 
       const isColorHidden = !!(this.templateManager.shouldFilterColor.get(color.id) || false);
 
+      // Check if user has premium and if this is a premium color
+      const userHasPremium = this.apiManager?.hasPremium || false;
+
+      // Check if this color is locked and not unlocked by the player
+      const isColorLocked = color.locked && !this.apiManager?.unlockedColors?.includes(color.id);
+
+      // Show badge only for locked colors that are not unlocked by the player
+      const showLockedBadge = isColorLocked;
+
       // Add the color to the color list DOM
       if (isWindowedMode) {
 
         // The star pattern for premium colors
         const styleBackgroundStar = `background-size: auto 100%; background-repeat: repeat-x; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50,5L79,91L2,39L98,39L21,91' fill='${textColorForPaletteColorBackground}' fill-opacity='.1'/></svg>");`;
+
+        // Locked badge HTML - only for locked colors that are not unlocked by the player
+        const lockedBadge = showLockedBadge ? `<span style="display:inline-block;background:rgba(255,193,7,0.2);color:#ffc107;border:1px solid #ffc107;border-radius:3px;padding:1px 4px;font-size:9px;font-weight:700;margin-left:4px;vertical-align:middle;">🔒</span>` : '';
 
         // Add windowed mode color DOM to color list
         colorList.addDiv({'class': 'bm-container bm-filter-color bm-flex-between',
@@ -414,12 +491,14 @@ export default class WindowFilter extends Overlay {
                     button.ariaLabel = `Show the color ${color.name || ''} on templates.`;
                     this.templateManager.shouldFilterColor.set(color.id, true);
                     this.templateManager.saveFilterColors();
+                    notifyCanvasChange(); // Clear cache when color visibility changes
                   } else {
                     button.innerHTML = this.eyeOpen.replace('<svg', `<svg fill="${textColorForPaletteColorBackground}"`);
                     button.dataset['state'] = 'shown';
                     button.ariaLabel = `Hide the color ${color.name || ''} on templates.`;
                     this.templateManager.shouldFilterColor.delete(color.id);
                     this.templateManager.saveFilterColors();
+                    notifyCanvasChange(); // Clear cache when color visibility changes
                   }
                   button.disabled = false;
                   button.style.textDecoration = '';
@@ -430,12 +509,15 @@ export default class WindowFilter extends Overlay {
               }
             ).buildElement()
             .addSmall({'textContent': `#${color.id.toString().padStart(2, 0)}`, 'style': `color: ${((color.id == -1) || (color.id == 0)) ? 'white' : textColorForPaletteColorBackground}`}).buildElement()
-            .addHeader(2, {'textContent': color.name, 'style': `color: ${((color.id == -1) || (color.id == 0)) ? 'white' : textColorForPaletteColorBackground}`}).buildElement()
+            .addHeader(2, {'innerHTML': color.name + lockedBadge, 'style': `color: ${((color.id == -1) || (color.id == 0)) ? 'white' : textColorForPaletteColorBackground}`}).buildElement()
             .addSmall({'class': 'bm-filter-color-pxl-cnt', 'textContent': `${colorCorrectLocalized} / ${colorTotalLocalized}`, 'style': `color: ${((color.id == -1) || (color.id == 0)) ? 'white' : textColorForPaletteColorBackground}; flex: 1 1 auto; text-align: right;`}).buildElement()
           .buildElement()
         .buildElement();
       } else {
         // Else we are in fullscreen mode.
+
+        // Locked badge HTML - only for locked colors that are not unlocked by the player
+        const lockedBadge = showLockedBadge ? `<span style="display:inline-block;background:rgba(255,193,7,0.2);color:#ffc107;border:1px solid #ffc107;border-radius:3px;padding:1px 4px;font-size:9px;font-weight:700;margin-left:4px;vertical-align:middle;">🔒</span>` : '';
 
         // Add fullscreen mode color DOM to color list
         colorList.addDiv({'class': 'bm-container bm-filter-color bm-flex-between',
@@ -465,12 +547,14 @@ export default class WindowFilter extends Overlay {
                       button.ariaLabel = `Show the color ${color.name || ''} on templates.`;
                       this.templateManager.shouldFilterColor.set(color.id, true);
                       this.templateManager.saveFilterColors();
+                      notifyCanvasChange(); // Clear cache when color visibility changes
                     } else {
                       button.innerHTML = this.eyeOpen.replace('<svg', `<svg fill="${textColorForPaletteColorBackground}"`);
                       button.dataset['state'] = 'shown';
                       button.ariaLabel = `Hide the color ${color.name || ''} on templates.`;
                       this.templateManager.shouldFilterColor.delete(color.id);
                       this.templateManager.saveFilterColors();
+                      notifyCanvasChange(); // Clear cache when color visibility changes
                     }
                     button.disabled = false;
                     button.style.textDecoration = '';
@@ -484,7 +568,7 @@ export default class WindowFilter extends Overlay {
             .addSmall({'textContent': (color.id == -2) ? '???????' : colorValueHex}).buildElement()
           .buildElement()
           .addDiv({'class': 'bm-flex-between'})
-            .addHeader(2, {'textContent': (color.premium ? '★ ' : '') + color.name}).buildElement()
+            .addHeader(2, {'innerHTML': (color.premium ? '★ ' : '') + color.name + lockedBadge}).buildElement()
             .addDiv({'class': 'bm-flex-between', 'style': 'gap: 1.5ch;'})
               .addSmall({'textContent': `#${color.id.toString().padStart(2, 0)}`}).buildElement()
               .addSmall({'class': 'bm-filter-color-pxl-cnt', 'textContent': `${colorCorrectLocalized} / ${colorTotalLocalized}`}).buildElement()
@@ -517,6 +601,7 @@ export default class WindowFilter extends Overlay {
       sortPrimary:   this.sortPrimary,
       sortSecondary: this.sortSecondary,
       showUnused:    this.showUnused,
+      hideCompleted: this.hideCompleted,
       scrollTop:     document.querySelector(`#${this.colorListID}`)?.parentElement?.scrollTop ?? 0
     }));
 
@@ -539,8 +624,23 @@ export default class WindowFilter extends Overlay {
         index.classList.remove('bm-color-hide'); // Show the color
       } else if (!Number(index.getAttribute('data-total'))) {
         // ...else if the user wants to hide unused colors, and this color is unused...
-        
+
         index.classList.add('bm-color-hide'); // Hide the color
+      }
+
+      // Hide completed colors if hideCompleted is enabled
+      if (this.hideCompleted) {
+        const colorCorrect = Number(index.getAttribute('data-correct'));
+        const colorTotal = Number(index.getAttribute('data-total'));
+        if (colorTotal > 0 && colorCorrect >= colorTotal) {
+          index.classList.add('bm-color-hide'); // Hide completed color
+        }
+      } else {
+        // Remove hide class if hideCompleted is disabled (but respect showUnused)
+        const colorTotal = Number(index.getAttribute('data-total'));
+        if (colorTotal > 0 || showUnused) {
+          index.classList.remove('bm-color-hide');
+        }
       }
 
       // If both index values are numbers...
@@ -721,6 +821,8 @@ export default class WindowFilter extends Overlay {
     this.allPixelsCorrectTotal = 0;
     this.allPixelsCorrect = new Map();
     this.allPixelsColor = new Map();
+    this.tilesLoadedTotal = 0;
+    this.tilesTotal = 0;
 
     // Sum the pixel totals across all templates.
     // If there is no total for a template, it defaults to zero
@@ -769,5 +871,12 @@ export default class WindowFilter extends Overlay {
     // Calculates the date & time the user will complete the templates
     this.timeRemaining = new Date(((this.allPixelsTotal - this.allPixelsCorrectTotal) * 30 * 1000) + Date.now());
     this.timeRemainingLocalized = localizeDate(this.timeRemaining);
+  }
+
+  /** Public method to update pixel statistics
+   * @since 0.92.4
+   */
+  updatePixelStatistics() {
+    this.#calculatePixelStatistics();
   }
 }

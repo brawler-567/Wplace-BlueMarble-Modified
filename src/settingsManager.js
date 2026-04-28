@@ -1,5 +1,176 @@
-import { sleep } from "./utils";
+/** @file Settings Manager for handling persistent storage and configuration
+ * @since 0.91.0
+ */
+
+import { sleep, debugLog } from "./utils";
 import WindowSettings from "./WindowSettings";
+
+// ─── Storage Helper Functions ─────────────────────────────────────────────────
+
+/** Helper function to get a value from storage with fallback
+ * @param {string} key - Storage key
+ * @param {*} defaultValue - Default value if not found
+ * @returns {*} Stored value or default
+ * @since 0.91.0
+ */
+function getStorageValue(key, defaultValue) {
+  try {
+    let value = null;
+
+    if (typeof GM_getValue !== 'undefined') {
+      const saved = GM_getValue(key, null);
+      if (saved !== null) value = JSON.parse(saved);
+    }
+
+    if (value === null) {
+      const saved = localStorage.getItem(key);
+      if (saved !== null) value = JSON.parse(saved);
+    }
+
+    return value !== null ? value : defaultValue;
+  } catch (error) {
+    console.warn(`Failed to load ${key}:`, error);
+    return defaultValue;
+  }
+}
+
+/** Helper function to save a value to storage
+ * @param {string} key - Storage key
+ * @param {*} value - Value to save
+ * @since 0.91.0
+ */
+function setStorageValue(key, value) {
+  try {
+    const valueString = JSON.stringify(value);
+
+    if (typeof GM_setValue !== 'undefined') {
+      GM_setValue(key, valueString);
+    }
+
+    localStorage.setItem(key, valueString);
+    debugLog(`Saved ${key}:`, value);
+  } catch (error) {
+    console.error(`Failed to save ${key}:`, error);
+  }
+}
+
+// ─── Crosshair Settings ───────────────────────────────────────────────────────
+
+export function getCrosshairColor() {
+  const saved = getStorageValue('bmCrosshairColor', null);
+
+  if (saved && saved.alpha === 180) {
+    saved.alpha = 255;
+    saveCrosshairColor(saved);
+    debugLog('Auto-migrated crosshair transparency from 71% to 100%');
+  }
+
+  return saved || { name: 'Red', rgb: [255, 0, 0], alpha: 255 };
+}
+
+export function saveCrosshairColor(colorConfig) {
+  setStorageValue('bmCrosshairColor', colorConfig);
+}
+
+export function getBorderEnabled() {
+  return getStorageValue('bmCrosshairBorder', false);
+}
+
+export function saveBorderEnabled(enabled) {
+  setStorageValue('bmCrosshairBorder', enabled);
+}
+
+export function getEnhancedSizeEnabled() {
+  return getStorageValue('bmCrosshairEnhancedSize', false);
+}
+
+export function saveEnhancedSizeEnabled(enabled) {
+  setStorageValue('bmCrosshairEnhancedSize', enabled);
+}
+
+// ─── Template Settings ────────────────────────────────────────────────────────
+
+export function getTemplateColorSort() {
+  return getStorageValue('bmTemplateColorSort', false);
+}
+
+export function saveTemplateColorSort(enabled) {
+  setStorageValue('bmTemplateColorSort', enabled);
+}
+
+export function getCompactSort() {
+  return getStorageValue('bmCompactSort', false);
+}
+
+export function saveCompactSort(enabled) {
+  setStorageValue('bmCompactSort', enabled);
+}
+
+// ─── Mini Tracker Settings ────────────────────────────────────────────────────
+
+export function getMiniTrackerEnabled() {
+  return getStorageValue('bmMiniTrackerEnabled', true);
+}
+
+export function saveMiniTrackerEnabled(enabled) {
+  setStorageValue('bmMiniTrackerEnabled', enabled);
+}
+
+// ─── Drag Mode Settings ───────────────────────────────────────────────────────
+
+export function getDragModeEnabled() {
+  return getStorageValue('bmDragModeEnabled', false);
+}
+
+export function saveDragModeEnabled(enabled) {
+  setStorageValue('bmDragModeEnabled', enabled);
+}
+
+// ─── Debug Logging Settings ───────────────────────────────────────────────────
+
+export function getDebugLoggingEnabled() {
+  return getStorageValue('bmDebugLogging', false);
+}
+
+export function saveDebugLoggingEnabled(enabled) {
+  setStorageValue('bmDebugLogging', enabled);
+}
+
+// ─── UI Visibility Settings ───────────────────────────────────────────────────
+
+export function getShowUsername() {
+  return getStorageValue('bmShowUsername', true);
+}
+
+export function saveShowUsername(show) {
+  setStorageValue('bmShowUsername', show);
+}
+
+export function getShowDroplets() {
+  return getStorageValue('bmShowDroplets', true);
+}
+
+export function saveShowDroplets(show) {
+  setStorageValue('bmShowDroplets', show);
+}
+
+export function getShowNextLevel() {
+  return getStorageValue('bmShowNextLevel', true);
+}
+
+export function saveShowNextLevel(show) {
+  setStorageValue('bmShowNextLevel', show);
+}
+
+export function getShowFullCharge() {
+  return getStorageValue('bmShowFullCharge', true);
+}
+
+export function saveShowFullCharge(show) {
+  setStorageValue('bmShowFullCharge', show);
+}
+
+// ─── Original SettingsManager Class ───────────────────────────────────────────
 
 /** SettingsManager class for handling user settings and making them persist between sessions.
  * Logic for {@link WindowSettings} is managed here.

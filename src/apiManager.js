@@ -19,6 +19,7 @@ export default class ApiManager {
     this.chargeRefillTimerID = ''; // Contains the Charge refill timer element ID attribute so we can update the timer.
     this.coordsTilePixel = []; // Contains the last detected tile/pixel coordinate pair requested
     this.templateCoordsTilePixel = []; // Contains the last "enabled" template coords
+    this.unlockedColors = []; // Contains the list of unlocked color IDs for the player
   }
 
   /** Determines if the spontaneously received response is something we want.
@@ -73,6 +74,10 @@ export default class ApiManager {
             ));
           }
           this.templateManager.userID = dataJSON['id'];
+          this.myID = dataJSON['id'];
+          this.myName = dataJSON['username'] || dataJSON['name'] || 'Player';
+          this.hasPremium = dataJSON['premium'] || dataJSON['isPremium'] || false;
+          this.unlockedColors = dataJSON['unlockedColors'] || dataJSON['colors'] || [];
 
           // Obtains the refill timer for charges
           if (this.chargeRefillTimerID.length != 0) {
@@ -88,6 +93,25 @@ export default class ApiManager {
               chargeRefillTimer.dataset['endDate'] = Date.now() + ((chargeData['max'] - chargeData['count']) * chargeData['cooldownMs']);
             }
           }
+
+          // Store paint/cooldown information for external access
+          this.userPaintData = {
+            charges: dataJSON['charges']?.count || 0,
+            maxCharges: dataJSON['charges']?.max || 1,
+            nextChargeTime: dataJSON['charges']?.nextChargeTime || null,
+            cooldownMs: dataJSON['charges']?.cooldownMs || null,
+            canPaint: dataJSON['canPaint'] || false,
+            timeUntilNextCharge: null
+          };
+
+          // Calculate time until next charge if available
+          if (this.userPaintData.nextChargeTime) {
+            const nextChargeTimestamp = new Date(this.userPaintData.nextChargeTime).getTime();
+            const currentTime = Date.now();
+            this.userPaintData.timeUntilNextCharge = Math.max(0, nextChargeTimestamp - currentTime);
+          }
+
+          console.log('Blue Marble: Paint Data:', this.userPaintData);
 
           // Updates displayed droplet information
           overlay.updateInnerHTML('bm-user-droplets', `Droplets: <b>${localizeNumber(dataJSON['droplets'])}</b>`); // Updates the text content of the droplets field
@@ -195,109 +219,155 @@ export default class ApiManager {
     });
   }
 
-  // Sends a heartbeat to the telemetry server
-  async sendHeartbeat(version) {
+  /** Place a pixel at the specified coordinates with the specified color
+   * @param {number} tileX - Tile X coordinate
+   * @param {number} tileY - Tile Y coordinate
+   * @param {number} pixelX - Pixel X coordinate within tile
+   * @param {number} pixelY - Pixel Y coordinate within tile
+   * @param {number} colorId - Color ID to paint
+   * @returns {Promise<boolean>} True if successful, false otherwise
+   * @since 0.88.1
+   */
+  async placePixel(tileX, tileY, pixelX, pixelY, colorId) {
+    try {
+      const requestBody = {
+        'season': 0,
+        'tiles': [{
+          'x': tileX,
+          'y': tileY,
+          'pixels': {
+            'x': [pixelX],
+            'y': [pixelY],
+            'colors': [colorId]
+          }
+        }]
+      };
 
-    console.log('Sending heartbeat to telemetry server...');
+      console.log(`Attempting to place pixel: tileX=${tileX}, tileY=${tileY}, pixelX=${pixelX}, pixelY=${pixelY}, color=${colorId}`);
+      console.log('Request body:', JSON.stringify(requestBody));
 
-    let userSettings = GM_getValue('bmUserSettings', '{}')
-    userSettings = JSON.parse(userSettings);
+      const response = await fetch(`https://backend.wplace.live/paint`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=UTF-8',
+        },
+        credentials: 'include',
+        body: JSON.stringify(requestBody)
+      });
 
-    if (!userSettings || !userSettings.telemetry || !userSettings.uuid) {
-      console.log('Telemetry is disabled, not sending heartbeat.');
-      return; // If telemetry is disabled, do not send heartbeat
-    }
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`Successfully placed pixel:`, result);
+        return { success: true };
+      } else {
+        const errorText = await response.text();
+        console.error(`Failed to place pixel: ${response.status} ${response.statusText}`, errorText);
 
-    const ua = navigator.userAgent;
-    let browser = await this.getBrowserFromUA(ua);
-    let os = this.getOS(ua);
-
-    GM_xmlhttpRequest({
-      method: 'POST',
-      url: 'https://telemetry.thebluecorner.net/heartbeat',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      data: JSON.stringify({
-        uuid: userSettings.uuid,
-        version: version,
-        browser: browser,
-        os: os,
-      }),
-      onload: (response) => {
-        if (response.status !== 200) {
-          consoleError('Failed to send heartbeat:', response.statusText);
+        // Check if it's a challenge-required error (403)
+        if (response.status === 403) {
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.error === 'challenge-required') {
+              return { success: false, challengeRequired: true };
+            }
+          } catch (e) {
+            // Not JSON or different error
+          }
         }
-      },
-      onerror: (error) => {
-        consoleError('Error sending heartbeat:', error);
+
+        return { success: false, challengeRequired: false };
       }
-    });
-  }
-
-  async getBrowserFromUA(ua = navigator.userAgent) {
-    ua = ua || "";
-
-    // Opera
-    if (ua.includes("OPR/") || ua.includes("Opera")) return "Opera";
-
-    // Edge (Chromium-based uses "Edg/")
-    if (ua.includes("Edg/")) return "Edge";
-
-    // Vivaldi
-    if (ua.includes("Vivaldi")) return "Vivaldi";
-
-    // Yandex
-    if (ua.includes("YaBrowser")) return "Yandex";
-
-    // Kiwi (not guaranteed, but typically shows "Kiwi")
-    if (ua.includes("Kiwi")) return "Kiwi";
-
-    // Brave (doesn't expose in UA by default; heuristic via Brave/ token in some versions)
-    if (ua.includes("Brave")) return "Brave";
-
-    // Firefox
-    if (ua.includes("Firefox/")) return "Firefox";
-
-    // Chrome (catch-all for Chromium browsers)
-    if (ua.includes("Chrome/")) return "Chrome";
-
-    // Safari (must be after Chrome check)
-    if (ua.includes("Safari/")) return "Safari";
-
-    // Brave special check
-    if (navigator.brave && typeof navigator.brave.isBrave === "function") {
-      if (await navigator.brave.isBrave()) return "Brave";
+    } catch (error) {
+      console.error('Error placing pixel:', error);
+      return { success: false, challengeRequired: false };
     }
-
-    // Fallback
-    return 'Unknown';
   }
 
-  getOS(ua = navigator.userAgent) {
-    ua = ua || "";
+  /** Place multiple pixels in a single batch request
+   * @param {Array<{tileX: number, tileY: number, pixelX: number, pixelY: number, colorId: number}>} pixels
+   * @returns {Promise<{success: boolean, challengeRequired: boolean, painted: number}>}
+   * @since 0.92.4
+   */
+  async placePixelsBatch(pixels) {
+    try {
+      // Group pixels by tile
+      const tileMap = new Map();
 
-    if (/Windows NT 11/i.test(ua)) return "Windows 11";
-    if (/Windows NT 10/i.test(ua)) return "Windows 10";
-    if (/Windows NT 6\.3/i.test(ua)) return "Windows 8.1";
-    if (/Windows NT 6\.2/i.test(ua)) return "Windows 8";
-    if (/Windows NT 6\.1/i.test(ua)) return "Windows 7";
-    if (/Windows NT 6\.0/i.test(ua)) return "Windows Vista";
-    if (/Windows NT 5\.1|Windows XP/i.test(ua)) return "Windows XP";
+      for (const pixel of pixels) {
+        const tileKey = `${pixel.tileX},${pixel.tileY}`;
+        if (!tileMap.has(tileKey)) {
+          tileMap.set(tileKey, {
+            x: pixel.tileX,
+            y: pixel.tileY,
+            pixels: {
+              x: [],
+              y: [],
+              colors: []
+            }
+          });
+        }
 
-    if (/Mac OS X 10[_\.]15/i.test(ua)) return "macOS Catalina";
-    if (/Mac OS X 10[_\.]14/i.test(ua)) return "macOS Mojave";
-    if (/Mac OS X 10[_\.]13/i.test(ua)) return "macOS High Sierra";
-    if (/Mac OS X 10[_\.]12/i.test(ua)) return "macOS Sierra";
-    if (/Mac OS X 10[_\.]11/i.test(ua)) return "OS X El Capitan";
-    if (/Mac OS X 10[_\.]10/i.test(ua)) return "OS X Yosemite";
-    if (/Mac OS X 10[_\.]/i.test(ua)) return "macOS"; // Generic fallback
+        const tile = tileMap.get(tileKey);
+        tile.pixels.x.push(pixel.pixelX);
+        tile.pixels.y.push(pixel.pixelY);
+        tile.pixels.colors.push(pixel.colorId);
+      }
 
-    if (/Android/i.test(ua)) return "Android";
-    if (/iPhone|iPad|iPod/i.test(ua)) return "iOS";
+      const requestBody = {
+        'season': 0,
+        'tiles': Array.from(tileMap.values())
+      };
 
-    if (/Linux/i.test(ua)) return "Linux";
+      console.log(`Attempting to place ${pixels.length} pixels in batch`);
+      console.log('Request body:', JSON.stringify(requestBody));
 
-    return "Unknown";
+      const response = await fetch(`https://backend.wplace.live/paint`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=UTF-8',
+        },
+        credentials: 'include',
+        body: JSON.stringify(requestBody)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`Successfully placed pixels:`, result);
+        return { success: true, painted: result.painted || pixels.length };
+      } else {
+        const errorText = await response.text();
+        console.error(`Failed to place pixels: ${response.status} ${response.statusText}`, errorText);
+
+        // Try to parse error response
+        let errorJson = null;
+        try {
+          errorJson = JSON.parse(errorText);
+        } catch (e) {
+          // Not JSON
+        }
+
+        // Check if it's a challenge-required error (403)
+        if (response.status === 403) {
+          if (errorJson?.error === 'challenge-required') {
+            return { success: false, challengeRequired: true, painted: 0 };
+          }
+          // Other 403 error - might be insufficient charges
+          if (errorJson?.charges !== undefined) {
+            return {
+              success: false,
+              challengeRequired: false,
+              painted: errorJson.painted || 0,
+              error: `Insufficient charges. You have ${Math.floor(errorJson.charges)} charges.`
+            };
+          }
+        }
+
+        return { success: false, challengeRequired: false, painted: 0, error: `Server error: ${response.status}` };
+      }
+    } catch (error) {
+      console.error('Error placing pixels batch:', error);
+      return { success: false, challengeRequired: false, painted: 0 };
+    }
   }
+
 }
