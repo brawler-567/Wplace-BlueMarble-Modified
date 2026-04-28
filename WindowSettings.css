@@ -1,0 +1,79 @@
+/* @since 0.91.22 */
+
+/* Highlight preset group container */
+#bm-window-settings div:has(> .bm-highlight-preset-container) {
+  width: fit-content;
+  justify-content: flex-start;
+}
+
+/* Highlight preset container */
+#bm-window-settings .bm-highlight-preset-container {
+  display: flex;
+  flex-direction: column;
+  width: 13%;
+}
+
+/* Highlight preset title */
+#bm-window-settings .bm-highlight-preset-container span {
+  width: fit-content;
+  margin: auto;
+  font-size: 0.7em;
+}
+
+/* Highlight preset button */
+#bm-window-settings .bm-highlight-preset-container button {
+  width: fit-content;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Highlight preset SVG */
+#bm-window-settings .bm-highlight-preset-container svg {
+  stroke: #333;
+  stroke-width: 0.02px;
+  width: 100%;
+  min-width: 1.5ch;
+  max-width: 14.5ch;
+}
+
+/* Highlight preset SVG on hover/focus */
+#bm-window-settings .bm-highlight-preset-container button:hover svg,
+#bm-window-settings .bm-highlight-preset-container button:focus svg {
+  opacity: 0.9;
+}
+
+/* Highlight pattern container */
+#bm-window-settings .bm-highlight-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  width: 25%;
+  min-width: 3ch;
+  max-width: 15ch;
+}
+
+/* Highlight pattern button */
+#bm-window-settings .bm-highlight-grid > button {
+  width: 100%;
+  padding: 0;
+  aspect-ratio: 1 / 1;
+  background-color: white;
+  border: #333 1px solid;
+  border-radius: 0;
+  box-sizing: border-box;
+}
+
+/* Highlight pattern button in 'Incorrect' mode */
+#bm-window-settings .bm-highlight-grid > button[data-status="Incorrect"] {
+  background-color: brown;
+}
+
+/* Highlight pattern button in 'Template' mode */
+#bm-window-settings .bm-highlight-grid > button[data-status="Template"] {
+  background-color: darkslategray;
+}
+
+/* Highlight pattern button when hovered/focused */
+#bm-window-settings .bm-highlight-grid > button:hover,
+#bm-window-settings .bm-highlight-grid > button:focus {
+  opacity: 0.8;
+}

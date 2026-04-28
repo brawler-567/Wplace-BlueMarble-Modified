@@ -1,0 +1,373 @@
+/** ApiManager class for handling API requests, responses, and interactions.
+ * Note: Fetch spying is done in main.js, not here.
+ * @class ApiManager
+ * @since 0.11.1
+ */
+
+import TemplateManager from "./templateManager.js";
+import { consoleError, escapeHTML, localizeNumber, numberToEncoded, serverTPtoDisplayTP } from "./utils.js";
+
+export default class ApiManager {
+
+  /** Constructor for ApiManager class
+   * @param {TemplateManager} templateManager 
+   * @since 0.11.34
+   */
+  constructor(templateManager) {
+    this.templateManager = templateManager;
+    this.disableAll = false; // Should the entire userscript be disabled?
+    this.chargeRefillTimerID = ''; // Contains the Charge refill timer element ID attribute so we can update the timer.
+    this.coordsTilePixel = []; // Contains the last detected tile/pixel coordinate pair requested
+    this.templateCoordsTilePixel = []; // Contains the last "enabled" template coords
+    this.unlockedColors = []; // Contains the list of unlocked color IDs for the player
+  }
+
+  /** Determines if the spontaneously received response is something we want.
+   * Otherwise, we can ignore it.
+   * Note: Due to aggressive compression, make your calls like `data['jsonData']['name']` instead of `data.jsonData.name`
+   * 
+   * @param {Overlay} overlay - The Overlay class instance
+   * @since 0.11.1
+  */
+  spontaneousResponseListener(overlay) {
+
+    // Triggers whenever a message is sent
+    window.addEventListener('message', async (event) => {
+
+      const data = event.data; // The data of the message
+      const dataJSON = data['jsonData']; // The JSON response, if any
+
+      // Kills itself if the message was not intended for Blue Marble
+      if (!(data && data['source'] === 'blue-marble')) {return;}
+
+      // Kills itself if the message has no endpoint (intended for Blue Marble, but not this function)
+      if (!data['endpoint']) {return;}
+
+      // Trims endpoint to the second to last non-number, non-null directoy.
+      // E.g. "wplace.live/api/pixel/0/0?payload" -> "pixel"
+      // E.g. "wplace.live/api/files/s0/tiles/0/0/0.png" -> "tiles"
+      const endpointText = data['endpoint']?.split('?')[0].split('/').filter(s => s && isNaN(Number(s))).filter(s => s && !s.includes('.')).pop();
+
+      console.log(`%cBlue Marble%c: Recieved message about "%s"`, 'color: cornflowerblue;', '', endpointText);
+
+      // Each case is something that Blue Marble can use from the fetch.
+      // For instance, if the fetch was for "me", we can update the overlay stats
+      switch (endpointText) {
+
+        case 'me': // Request to retrieve user data
+
+          // If the game can not retrieve the userdata...
+          if (dataJSON['status'] && dataJSON['status']?.toString()[0] != '2') {
+            // The server is probably down (NOT a 2xx status)
+            
+            overlay.handleDisplayError(`You are not logged in or Wplace is offline!\nCould not fetch userdata.`);
+            return; // Kills itself before attempting to display null userdata
+          }
+
+          const nextLevelPixels = Math.ceil(Math.pow(Math.floor(dataJSON['level']) * Math.pow(30, 0.65), (1/0.65)) - dataJSON['pixelsPainted']); // Calculates pixels to the next level
+
+          console.log(dataJSON['id']);
+          if (!!dataJSON['id'] || dataJSON['id'] === 0) {
+            console.log(numberToEncoded(
+              dataJSON['id'],
+              '!#$%&\'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~'
+            ));
+          }
+          this.templateManager.userID = dataJSON['id'];
+          this.myID = dataJSON['id'];
+          this.myName = dataJSON['username'] || dataJSON['name'] || 'Player';
+          this.hasPremium = dataJSON['premium'] || dataJSON['isPremium'] || false;
+          this.unlockedColors = dataJSON['unlockedColors'] || dataJSON['colors'] || [];
+
+          // Obtains the refill timer for charges
+          if (this.chargeRefillTimerID.length != 0) {
+            const chargeRefillTimer = document.querySelector('#' + this.chargeRefillTimerID);
+            
+            // If the refill timer exists...
+            if (chargeRefillTimer) {
+              
+              /** Obtains the information about the user's charges @type {{cooldownMs: number, count: number, max: number}} */
+              const chargeData = dataJSON['charges'];
+  
+              // Date that the user's charges will be refilled
+              chargeRefillTimer.dataset['endDate'] = Date.now() + ((chargeData['max'] - chargeData['count']) * chargeData['cooldownMs']);
+            }
+          }
+
+          // Store paint/cooldown information for external access
+          this.userPaintData = {
+            charges: dataJSON['charges']?.count || 0,
+            maxCharges: dataJSON['charges']?.max || 1,
+            nextChargeTime: dataJSON['charges']?.nextChargeTime || null,
+            cooldownMs: dataJSON['charges']?.cooldownMs || null,
+            canPaint: dataJSON['canPaint'] || false,
+            timeUntilNextCharge: null
+          };
+
+          // Calculate time until next charge if available
+          if (this.userPaintData.nextChargeTime) {
+            const nextChargeTimestamp = new Date(this.userPaintData.nextChargeTime).getTime();
+            const currentTime = Date.now();
+            this.userPaintData.timeUntilNextCharge = Math.max(0, nextChargeTimestamp - currentTime);
+          }
+
+          console.log('Blue Marble: Paint Data:', this.userPaintData);
+
+          // Updates displayed droplet information
+          overlay.updateInnerHTML('bm-user-droplets', `Droplets: <b>${localizeNumber(dataJSON['droplets'])}</b>`); // Updates the text content of the droplets field
+          overlay.updateInnerHTML('bm-user-nextlevel', `Next level in <b>${localizeNumber(nextLevelPixels)}</b> pixel${nextLevelPixels == 1 ? '' : 's'}`); // Updates the text content of the next level field
+          break;
+
+        case 'pixel': // Request to retrieve pixel data
+          const coordsTile = data['endpoint'].split('?')[0].split('/').filter(s => s && !isNaN(Number(s))); // Retrieves the tile coords as [x, y]
+          const payloadExtractor = new URLSearchParams(data['endpoint'].split('?')[1]); // Declares a new payload deconstructor and passes in the fetch request payload
+          const coordsPixel = [payloadExtractor.get('x'), payloadExtractor.get('y')]; // Retrieves the deconstructed pixel coords from the payload
+          
+          // Don't save the coords if there are previous coords that could be used
+          if (this.coordsTilePixel.length && (!coordsTile.length || !coordsPixel.length)) {
+            overlay.handleDisplayError(`Coordinates are malformed!\nDid you try clicking the canvas first?`);
+            return; // Kills itself
+          }
+          
+          this.coordsTilePixel = [...coordsTile, ...coordsPixel]; // Combines the two arrays such that [x, y, x, y]
+          
+          const displayTP = serverTPtoDisplayTP(coordsTile, coordsPixel); // Retrieves the coordinates that Wplace displays for this region
+
+          const spanElements = document.querySelectorAll('span'); // Retrieves all span elements
+
+          // For every span element, find the one we want (pixel numbers when canvas clicked)
+          for (const element of spanElements) {
+            // We use the pixel numbers to find this element because it is the only identifiable piece of information, assuming the website can load in non-Engligh languages.
+
+            const elementTextTrimmed = element.textContent.trim(); // Stores the text of the span element, without leading or trailing spaces
+
+            // If the text content of the element includes both coordinates seperatly (avoids failure when the comma seperator changes due to localization)
+            if (elementTextTrimmed.includes(displayTP[0]) && elementTextTrimmed.includes(displayTP[1])) {
+
+              let displayCoords = document.querySelector('#bm-display-coords'); // Find the additional pixel coords span
+
+              const text = `(Tl X: ${coordsTile[0]}, Tl Y: ${coordsTile[1]}, Px X: ${coordsPixel[0]}, Px Y: ${coordsPixel[1]})`;
+              
+              // All 4 coordinate labels, IDs, and values
+              const coordsLabel = ['Tl X:', 'Tl Y:', 'Px X:', 'Px Y:'];
+              const coordsID = ['bm-tile-x', 'bm-tile-y', 'bm-pixel-x', 'bm-pixel-y'];
+              const coordsCombined = [...coordsTile, ...coordsPixel];
+
+              // If we could not find the addition coord span, we make it then update the textContent with the new coords
+              if (!displayCoords) {
+                displayCoords = document.createElement('span');
+                displayCoords.id = 'bm-display-coords';
+                displayCoords.style = 'display: flex; flex-wrap: wrap; gap: 0 1ch; font-size: small;';
+
+                // For each of the 4 coordinates...
+                for (const [coordIndex, coordValue] of coordsCombined.entries()) {
+
+                  const coordElement = document.createElement('span'); // Creates a `<span>` element
+
+                  coordElement.id = coordsID[coordsCombined.indexOf(coordValue) ?? '']; // Applys the ID to the coord element
+
+                  // Outputs something like "Tl X: 483"
+                  coordElement.textContent = `${coordsLabel[coordIndex] ?? '??:'} ${coordValue}`;
+                  // Or if the amount of labels is less than the provided values, it outputs something like "??: 483" instead of failing
+
+                  displayCoords.appendChild(coordElement); // Adds the span coordinate as a child for the flexbox container
+                }
+
+                // Adds the display coordinate flexbox container to the pixel info menu
+                element.parentNode.parentNode.parentNode.insertAdjacentElement('afterend', displayCoords);
+              } else {
+                
+                // For each of the 4 coordinates...
+                for (const [coordIndex, coordID] of coordsID.entries()) {
+
+                  const coordElement = document.getElementById(coordID); // Obtains the coordinate element
+
+                  // Outputs something like "Tl X: 483"
+                  coordElement.textContent = `${coordsLabel[coordIndex] ?? '??:'} ${coordsCombined[coordIndex]}`;
+                  // Or if the amount of labels is less than the provided values, it outputs something like "??: 483" instead of failing
+                }
+              }
+            }
+          }
+          break;
+        
+        case 'tile':
+        case 'tiles':
+
+          let tileCoordsTile = data['endpoint'].split('/');
+          tileCoordsTile = [parseInt(tileCoordsTile[tileCoordsTile.length - 2]), parseInt(tileCoordsTile[tileCoordsTile.length - 1].replace('.png', ''))];
+          
+          const blobUUID = data['blobID'];
+          const blobData = data['blobData'];
+          
+          const timer = Date.now();
+          const templateBlob = await this.templateManager.drawTemplateOnTile(blobData, tileCoordsTile);
+          console.log(`Finished loading the tile in ${(Date.now() - timer) / 1000} seconds!`);
+
+          window.postMessage({
+            source: 'blue-marble',
+            blobID: blobUUID,
+            blobData: templateBlob,
+            blink: data['blink']
+          });
+          break;
+
+        case 'robots': // Request to retrieve what script types are allowed
+          this.disableAll = dataJSON['userscript']?.toString().toLowerCase() == 'false'; // Disables Blue Marble if site owner wants userscripts disabled
+          break;
+      }
+    });
+  }
+
+  /** Place a pixel at the specified coordinates with the specified color
+   * @param {number} tileX - Tile X coordinate
+   * @param {number} tileY - Tile Y coordinate
+   * @param {number} pixelX - Pixel X coordinate within tile
+   * @param {number} pixelY - Pixel Y coordinate within tile
+   * @param {number} colorId - Color ID to paint
+   * @returns {Promise<boolean>} True if successful, false otherwise
+   * @since 0.88.1
+   */
+  async placePixel(tileX, tileY, pixelX, pixelY, colorId) {
+    try {
+      const requestBody = {
+        'season': 0,
+        'tiles': [{
+          'x': tileX,
+          'y': tileY,
+          'pixels': {
+            'x': [pixelX],
+            'y': [pixelY],
+            'colors': [colorId]
+          }
+        }]
+      };
+
+      console.log(`Attempting to place pixel: tileX=${tileX}, tileY=${tileY}, pixelX=${pixelX}, pixelY=${pixelY}, color=${colorId}`);
+      console.log('Request body:', JSON.stringify(requestBody));
+
+      const response = await fetch(`https://backend.wplace.live/paint`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=UTF-8',
+        },
+        credentials: 'include',
+        body: JSON.stringify(requestBody)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`Successfully placed pixel:`, result);
+        return { success: true };
+      } else {
+        const errorText = await response.text();
+        console.error(`Failed to place pixel: ${response.status} ${response.statusText}`, errorText);
+
+        // Check if it's a challenge-required error (403)
+        if (response.status === 403) {
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.error === 'challenge-required') {
+              return { success: false, challengeRequired: true };
+            }
+          } catch (e) {
+            // Not JSON or different error
+          }
+        }
+
+        return { success: false, challengeRequired: false };
+      }
+    } catch (error) {
+      console.error('Error placing pixel:', error);
+      return { success: false, challengeRequired: false };
+    }
+  }
+
+  /** Place multiple pixels in a single batch request
+   * @param {Array<{tileX: number, tileY: number, pixelX: number, pixelY: number, colorId: number}>} pixels
+   * @returns {Promise<{success: boolean, challengeRequired: boolean, painted: number}>}
+   * @since 0.92.4
+   */
+  async placePixelsBatch(pixels) {
+    try {
+      // Group pixels by tile
+      const tileMap = new Map();
+
+      for (const pixel of pixels) {
+        const tileKey = `${pixel.tileX},${pixel.tileY}`;
+        if (!tileMap.has(tileKey)) {
+          tileMap.set(tileKey, {
+            x: pixel.tileX,
+            y: pixel.tileY,
+            pixels: {
+              x: [],
+              y: [],
+              colors: []
+            }
+          });
+        }
+
+        const tile = tileMap.get(tileKey);
+        tile.pixels.x.push(pixel.pixelX);
+        tile.pixels.y.push(pixel.pixelY);
+        tile.pixels.colors.push(pixel.colorId);
+      }
+
+      const requestBody = {
+        'season': 0,
+        'tiles': Array.from(tileMap.values())
+      };
+
+      console.log(`Attempting to place ${pixels.length} pixels in batch`);
+      console.log('Request body:', JSON.stringify(requestBody));
+
+      const response = await fetch(`https://backend.wplace.live/paint`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=UTF-8',
+        },
+        credentials: 'include',
+        body: JSON.stringify(requestBody)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`Successfully placed pixels:`, result);
+        return { success: true, painted: result.painted || pixels.length };
+      } else {
+        const errorText = await response.text();
+        console.error(`Failed to place pixels: ${response.status} ${response.statusText}`, errorText);
+
+        // Try to parse error response
+        let errorJson = null;
+        try {
+          errorJson = JSON.parse(errorText);
+        } catch (e) {
+          // Not JSON
+        }
+
+        // Check if it's a challenge-required error (403)
+        if (response.status === 403) {
+          if (errorJson?.error === 'challenge-required') {
+            return { success: false, challengeRequired: true, painted: 0 };
+          }
+          // Other 403 error - might be insufficient charges
+          if (errorJson?.charges !== undefined) {
+            return {
+              success: false,
+              challengeRequired: false,
+              painted: errorJson.painted || 0,
+              error: `Insufficient charges. You have ${Math.floor(errorJson.charges)} charges.`
+            };
+          }
+        }
+
+        return { success: false, challengeRequired: false, painted: 0, error: `Server error: ${response.status}` };
+      }
+    } catch (error) {
+      console.error('Error placing pixels batch:', error);
+      return { success: false, challengeRequired: false, painted: 0 };
+    }
+  }
+
+}
